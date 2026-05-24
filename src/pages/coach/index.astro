@@ -1,0 +1,9 @@
+---
+import RootLayout from '@/layouts/RootLayout.astro';
+import Entry from '@/components/entry';
+const u = Astro.locals.user!;
+const user = { id: u.sub, nombre: u.nombre, email: '', rol: u.rol };
+---
+<RootLayout title="Fitvang — Coach">
+  <Entry client:load view="coach/home" user={user} />
+</RootLayout>

@@ -1,0 +1,34 @@
+import type { HTMLAttributes } from 'react';
+import { cn } from '@/lib/utils';
+
+export function Card({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn(
+        'rounded-2xl border border-border bg-card/80 backdrop-blur-sm p-5 shadow-[0_1px_0_rgba(255,255,255,0.04)_inset]',
+        className,
+      )}
+      {...rest}
+    />
+  );
+}
+
+export function StatCard({
+  label,
+  value,
+  hint,
+  accent = false,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  accent?: boolean;
+}) {
+  return (
+    <Card className={cn(accent && 'border-primary/40')}>
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-2 text-3xl font-bold">{value}</p>
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+    </Card>
+  );
+}
