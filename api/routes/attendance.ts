@@ -73,29 +73,35 @@ attendanceRouter.post('/bulk', zValidator('json', bulkSchema), async (c) => {
     .from(bookings)
     .where(and(eq(bookings.sessionId, sessionId), inArray(bookings.estado, ['activa', 'asistio', 'no_asistio'])));
 
+  const errors: string[] = [];
   for (const b of bks) {
-    await db
-      .insert(attendances)
-      .values({ bookingId: b.id, presente, marcadoPor: me.sub })
-      .onConflictDoUpdate({
-        target: attendances.bookingId,
-        set: { presente, marcadoPor: me.sub, marcadoAt: new Date() },
-      });
-    await db
-      .update(bookings)
-      .set({ estado: presente ? 'asistio' : 'no_asistio' })
-      .where(eq(bookings.id, b.id));
+    try {
+      await db
+        .insert(attendances)
+        .values({ bookingId: b.id, presente, marcadoPor: me.sub })
+        .onConflictDoUpdate({
+          target: attendances.bookingId,
+          set: { presente, marcadoPor: me.sub, marcadoAt: new Date() },
+        });
+      await db
+        .update(bookings)
+        .set({ estado: presente ? 'asistio' : 'no_asistio' })
+        .where(eq(bookings.id, b.id));
+    } catch (err) {
+      console.error('[attendance] bulk mark error for booking', b.id, err);
+      errors.push(b.id);
+    }
   }
 
   if (presente) {
     for (const b of bks) {
-      await sendPushToUser(b.userId, 'asistencia', {
-        title: '¡Asistencia registrada! 🔥',
+      sendPushToUser(b.userId, 'asistencia', {
+        title: '¡Asistencia registrada!',
         body: `Tu asistencia fue marcada por ${me.nombre}.`,
         url: '/app/asistencias',
-      });
+      }).catch(() => {});
       persistScoring(b.userId).catch(() => {});
     }
   }
-  return c.json({ marked: bks.length });
+  return c.json({ marked: bks.length - errors.length, errors: errors.length > 0 ? errors : undefined });
 });

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { env } from './lib/env';
 import { authRouter } from './routes/auth';
 import { usersRouter } from './routes/users';
 import { plansRouter } from './routes/plans';
@@ -17,7 +18,13 @@ app.use('*', logger());
 app.use(
   '*',
   cors({
-    origin: (origin) => origin ?? '*',
+    origin: (origin) => {
+      if (!origin) return null;
+      if (origin === env.PUBLIC_APP_URL) return origin;
+      // Permitir localhost en desarrollo
+      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return origin;
+      return null;
+    },
     credentials: true,
   })
 );

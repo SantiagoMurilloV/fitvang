@@ -14,6 +14,7 @@ import {
 import { requireAuth } from '../middleware/jwt';
 import { requireAdmin, requireStaff } from '../middleware/rbac';
 import { generateUpcomingSessions } from '../services/scheduler.service';
+import { sendPushToUser } from '../services/webpush.service';
 
 export const classesRouter = new Hono();
 classesRouter.use('*', requireAuth);
@@ -99,12 +100,30 @@ classesRouter.get('/sessions', async (c) => {
 classesRouter.post('/sessions/:id/cancel', requireStaff, async (c) => {
   const me = c.get('user');
   const { motivo } = await c.req.json().catch(() => ({ motivo: undefined }));
+  const sessionId = c.req.param('id');
+
   await db
     .update(classSessions)
     .set({ estado: 'cancelada', cancelacionMotivo: motivo, canceladaPor: me.sub })
-    .where(eq(classSessions.id, c.req.param('id')));
-  // TODO: notificar a reservados
-  return c.json({ ok: true });
+    .where(eq(classSessions.id, sessionId));
+
+  // Notificar a todos los usuarios con reserva activa
+  const activeBookings = await db
+    .select({ userId: bookings.userId })
+    .from(bookings)
+    .where(and(eq(bookings.sessionId, sessionId), eq(bookings.estado, 'activa')));
+
+  await Promise.all(
+    activeBookings.map((b) =>
+      sendPushToUser(b.userId, 'clase_cancelada', {
+        title: 'Clase cancelada',
+        body: motivo ? `La clase fue cancelada: ${motivo}` : 'Una de tus clases reservadas fue cancelada.',
+        url: '/app/horarios',
+      }).catch(() => {})
+    )
+  );
+
+  return c.json({ ok: true, notificados: activeBookings.length });
 });
 
 // Generar sesiones manualmente

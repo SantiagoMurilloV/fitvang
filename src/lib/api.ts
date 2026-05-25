@@ -14,7 +14,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: Json): Promise<T> {
+async function request<T>(method: string, path: string, body?: Json, _retry = false): Promise<T> {
   const res = await fetch(`/api${path}`, {
     method,
     credentials: 'include',
@@ -29,10 +29,10 @@ async function request<T>(method: string, path: string, body?: Json): Promise<T>
     data = text;
   }
   if (!res.ok) {
-    // intentar refresh transparente una sola vez
-    if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login') {
+    // Intentar refresh transparente una sola vez (flag _retry evita bucle infinito)
+    if (res.status === 401 && !_retry && path !== '/auth/refresh' && path !== '/auth/login') {
       const r = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
-      if (r.ok) return request<T>(method, path, body);
+      if (r.ok) return request<T>(method, path, body, true);
     }
     throw new ApiError(res.status, data?.error ?? res.statusText, data);
   }

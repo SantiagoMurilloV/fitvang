@@ -37,17 +37,27 @@ export async function createWompiCheckoutUrl(input: WompiTransactionInput): Prom
  *    sha256( concat(properties...) + timestamp + WOMPI_EVENT_SECRET )
  * Las `properties` son strings de paths a leer dentro de `data`.
  */
-export function verifyWompiSignature(body: any): boolean {
+export function verifyWompiSignature(body: unknown): boolean {
   if (!env.WOMPI_EVENT_SECRET) return false;
-  const checksum: string | undefined = body?.signature?.checksum;
-  const properties: string[] | undefined = body?.signature?.properties;
-  const timestamp: number | undefined = body?.timestamp;
-  if (!checksum || !properties || !timestamp) return false;
+  if (typeof body !== 'object' || body === null) return false;
 
-  const concat = properties
+  const b = body as Record<string, unknown>;
+  const sig = b.signature as Record<string, unknown> | undefined;
+  const checksum = sig?.checksum;
+  const properties = sig?.properties;
+  const timestamp = b.timestamp;
+
+  if (typeof checksum !== 'string' || !Array.isArray(properties) || typeof timestamp !== 'number') return false;
+
+  const concat = (properties as string[])
     .map((p) => {
       // path estilo "transaction.id"
-      return p.split('.').reduce<any>((acc, k) => acc?.[k], body.data);
+      return p.split('.').reduce<unknown>((acc, k) => {
+        if (typeof acc === 'object' && acc !== null) {
+          return (acc as Record<string, unknown>)[k];
+        }
+        return undefined;
+      }, b.data);
     })
     .join('');
   const computed = createHash('sha256')

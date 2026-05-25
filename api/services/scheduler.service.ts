@@ -48,9 +48,10 @@ export async function generateUpcomingSessions(daysAhead = 30): Promise<number> 
  */
 export async function closeFinishedSessions(): Promise<number> {
   const today = format(new Date(), 'yyyy-MM-dd');
-  const res = await db
+  const updated = await db
     .update(classSessions)
     .set({ estado: 'finalizada' })
-    .where(and(eq(classSessions.estado, 'programada'), lte(classSessions.fecha, today)));
-  return (res as any).rowCount ?? 0;
+    .where(and(eq(classSessions.estado, 'programada'), lte(classSessions.fecha, today)))
+    .returning({ id: classSessions.id });
+  return updated.length;
 }

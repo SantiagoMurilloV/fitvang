@@ -42,9 +42,12 @@ export default function LoginForm({ next }: { next?: string }) {
         className="w-full max-w-sm mx-auto"
       >
         <div className="text-center mb-8">
-          <p className="text-[10px] tracking-[0.4em] text-primary uppercase">Fitvang · Cali</p>
-          <h1 className="text-4xl font-bold mt-2">FIT VANG</h1>
-          <p className="text-sm text-muted-foreground mt-2">Tu club. Tu progreso. Tu energía.</p>
+          <img
+            src="/icons/logo.png"
+            alt="Fitvang"
+            className="h-24 w-auto object-contain mx-auto"
+          />
+          <p className="text-sm text-muted-foreground mt-4">Tu club. Tu progreso. Tu energía.</p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
