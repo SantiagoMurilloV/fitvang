@@ -35,6 +35,8 @@ export function PushPromptModal({ open, onClose }: Props) {
     }
   }
 
+  if (typeof document === 'undefined') return null;
+
   return createPortal(
     <AnimatePresence>
       {open && (
