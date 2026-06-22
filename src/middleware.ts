@@ -1,6 +1,5 @@
 import { defineMiddleware } from 'astro:middleware';
-import { verifyAccess } from '@api/lib/jwt';
-import { ACCESS_COOKIE } from '@api/lib/env';
+import { verifyAccess, ACCESS_COOKIE } from '@/lib/auth';
 
 const PROTECTED_PREFIXES: Array<{ prefix: string; roles: Array<'super_admin' | 'coach' | 'user'> }> = [
   { prefix: '/admin', roles: ['super_admin'] },

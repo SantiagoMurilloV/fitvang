@@ -1,8 +1,7 @@
 ---
 import RootLayout from '@/layouts/RootLayout.astro';
 import LoginForm from '@/components/auth/LoginForm';
-import { verifyAccess } from '@api/lib/jwt';
-import { ACCESS_COOKIE } from '@api/lib/env';
+import { verifyAccess, ACCESS_COOKIE } from '@/lib/auth';
 
 const token = Astro.cookies.get(ACCESS_COOKIE)?.value;
 const payload = token ? await verifyAccess(token) : null;
