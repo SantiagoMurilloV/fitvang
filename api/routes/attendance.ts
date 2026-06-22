@@ -3,10 +3,10 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { eq, and, inArray } from 'drizzle-orm';
 import { db } from '../db/client';
-import { bookings, attendances, classSessions, classTemplates } from '../db/schema';
+import { bookings, attendances, classSessions, classTemplates, users, guardians } from '../db/schema';
 import { requireAuth } from '../middleware/jwt';
 import { requireStaff } from '../middleware/rbac';
-import { sendPushToUser } from '../services/webpush.service';
+import { notifyUser } from '../services/webpush.service';
 import { persistScoring } from '../services/scoring.service';
 
 export const attendanceRouter = new Hono();
@@ -55,12 +55,28 @@ attendanceRouter.post('/mark', zValidator('json', markSchema), async (c) => {
 
   if (presente) {
     const hora = rows[0].horaInicio.slice(0, 5);
-    await sendPushToUser(rows[0].userId, 'asistencia', {
+    const userId = rows[0].userId;
+    await notifyUser(userId, {
       title: '¡Asistencia registrada! 🔥',
       body: `Tu asistencia del ${rows[0].fecha} a las ${hora} fue registrada por ${me.nombre}.`,
       url: '/app/asistencias',
-    });
-    persistScoring(rows[0].userId).catch(() => {});
+    }, { tipo: 'asistencia' });
+    persistScoring(userId).catch(() => {});
+
+    // Notificar al acudiente si el usuario es menor
+    const userRow = await db.select({ esMenor: users.esMenor, nombre: users.nombreCompleto })
+      .from(users).where(eq(users.id, userId)).limit(1);
+    if (userRow[0]?.esMenor) {
+      const acudientes = await db.select({ acudienteId: guardians.acudienteId })
+        .from(guardians).where(eq(guardians.menorId, userId));
+      for (const a of acudientes) {
+        notifyUser(a.acudienteId, {
+          title: `${userRow[0].nombre} asistió 💪`,
+          body: `Se registró la asistencia del ${rows[0].fecha} a las ${hora}.`,
+          url: '/app',
+        }, { tipo: 'asistencia' }).catch(() => {});
+      }
+    }
   }
   return c.json({ ok: true });
 });
@@ -95,11 +111,11 @@ attendanceRouter.post('/bulk', zValidator('json', bulkSchema), async (c) => {
 
   if (presente) {
     for (const b of bks) {
-      sendPushToUser(b.userId, 'asistencia', {
+      notifyUser(b.userId, {
         title: '¡Asistencia registrada!',
         body: `Tu asistencia fue marcada por ${me.nombre}.`,
         url: '/app/asistencias',
-      }).catch(() => {});
+      }, { tipo: 'asistencia' }).catch(() => {});
       persistScoring(b.userId).catch(() => {});
     }
   }

@@ -14,12 +14,17 @@ import {
   clubConfig,
 } from '../db/schema';
 import { requireAuth } from '../middleware/jwt';
-import { sendPushToUser } from '../services/webpush.service';
+import { checkSelf } from '../middleware/rbac';
+import { notifyUser } from '../services/webpush.service';
+import { toZonedTime } from 'date-fns-tz';
+import { format, differenceInMinutes, parseISO } from 'date-fns';
 
 export const bookingsRouter = new Hono();
 bookingsRouter.use('*', requireAuth);
 
 const createSchema = z.object({ sessionId: z.string().uuid() });
+
+const TZ_BOG = 'America/Bogota';
 
 // Mis reservas
 bookingsRouter.get('/me', async (c) => {
@@ -77,6 +82,7 @@ bookingsRouter.post('/', zValidator('json', createSchema), async (c) => {
       id: classSessions.id,
       estado: classSessions.estado,
       fecha: classSessions.fecha,
+      horaInicio: classTemplates.horaInicio,
       trainingTypeId: classTemplates.trainingTypeId,
       trainingSlug: trainingTypes.slug,
       capacidadMax: classTemplates.capacidadMax,
@@ -95,6 +101,20 @@ bookingsRouter.post('/', zValidator('json', createSchema), async (c) => {
   if (sess.trainingSlug === 'kids') return c.json({ error: 'kids_solo_por_admin' }, 403);
   if (!plan.accesoMulti && plan.trainingTypeId !== sess.trainingTypeId) {
     return c.json({ error: 'plan_no_cubre_training' }, 403);
+  }
+
+  // ── Reglas de tiempo (igual que Bullfit) ──────────────────────────────
+  const nowBog = toZonedTime(new Date(), TZ_BOG);
+  const hourBog = nowBog.getHours();
+  // Ventana nocturna: no reservar entre 23:00 y 05:59 (hora Bogotá)
+  if (hourBog >= 23 || hourBog < 6) {
+    return c.json({ error: 'horario_restringido', message: 'No puedes reservar entre las 11 PM y las 6 AM.' }, 400);
+  }
+  // Mínimo 30 minutos de anticipación
+  const sessionStart = parseISO(`${sess.fecha}T${sess.horaInicio}`);
+  const minutosRestantes = differenceInMinutes(sessionStart, nowBog);
+  if (minutosRestantes < 30) {
+    return c.json({ error: 'muy_tarde_para_reservar', message: 'Debes reservar con al menos 30 minutos de anticipación.' }, 400);
   }
 
   // 4. Doble reserva
@@ -162,11 +182,11 @@ bookingsRouter.post('/:id/cancel', async (c) => {
   if (wl[0]) {
     await db.delete(waitlist).where(eq(waitlist.id, wl[0].id));
     await db.insert(bookings).values({ userId: wl[0].userId, sessionId: b.sessionId, estado: 'activa' });
-    await sendPushToUser(wl[0].userId, 'cupo_disponible', {
+    notifyUser(wl[0].userId, {
       title: '¡Hay un cupo para tu clase! 🎉',
       body: 'Pasaste de la lista de espera a confirmado.',
       url: '/app/horarios',
-    });
+    }, { tipo: 'reserva' }).catch(() => {});
   }
 
   return c.json({ ok: true, fueraDeVentana });

@@ -14,20 +14,20 @@ import {
 import { requireAuth } from '../middleware/jwt';
 import { requireAdmin, requireStaff } from '../middleware/rbac';
 import { generateUpcomingSessions } from '../services/scheduler.service';
-import { sendPushToUser } from '../services/webpush.service';
+import { notifyUser } from '../services/webpush.service';
 
 export const classesRouter = new Hono();
 classesRouter.use('*', requireAuth);
 
 // ---- Templates ----
 const templateSchema = z.object({
-  nombre: z.string().min(2),
+  nombre: z.string().trim().min(2).max(100),
   trainingTypeId: z.string().uuid(),
   coachId: z.string().uuid().optional(),
   diaSemana: z.enum(['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']),
-  horaInicio: z.string(),
-  horaFin: z.string(),
-  capacidadMax: z.number().int().positive().default(20),
+  horaInicio: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
+  horaFin: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
+  capacidadMax: z.number().int().positive().max(500).default(20),
   activo: z.boolean().default(true),
 });
 
@@ -115,11 +115,11 @@ classesRouter.post('/sessions/:id/cancel', requireStaff, async (c) => {
 
   await Promise.all(
     activeBookings.map((b) =>
-      sendPushToUser(b.userId, 'clase_cancelada', {
+      notifyUser(b.userId, {
         title: 'Clase cancelada',
         body: motivo ? `La clase fue cancelada: ${motivo}` : 'Una de tus clases reservadas fue cancelada.',
         url: '/app/horarios',
-      }).catch(() => {})
+      }, { tipo: 'clase_cancelada' }).catch(() => {})
     )
   );
 

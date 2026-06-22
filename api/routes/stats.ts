@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { eq, sql, and, gte, lte } from 'drizzle-orm';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import { db } from '../db/client';
 import {
   users,
@@ -10,7 +11,7 @@ import {
   classSessions,
 } from '../db/schema';
 import { requireAuth } from '../middleware/jwt';
-import { requireAdmin } from '../middleware/rbac';
+import { requireAdmin, requireStaff } from '../middleware/rbac';
 import { computeUserScoring } from '../services/scoring.service';
 
 export const statsRouter = new Hono();
@@ -22,6 +23,39 @@ statsRouter.get('/me/scoring', async (c) => {
   const mes = c.req.query('mes');
   const data = await computeUserScoring(me.sub, mes);
   return c.json(data);
+});
+
+// Scoring de otro usuario (coach/admin)
+statsRouter.get('/:id/scoring', requireStaff, async (c) => {
+  const me = c.get('user');
+  const id = c.req.param('id');
+  if (me.rol === 'user') return c.json({ error: 'forbidden' }, 403);
+  const mes = c.req.query('mes');
+  const data = await computeUserScoring(id, mes);
+  return c.json(data);
+});
+
+// Historial de asistencias por día (para grid tipo GitHub, últimos N días)
+statsRouter.get('/me/heatmap', async (c) => {
+  const me = c.get('user');
+  const days = Math.min(Number(c.req.query('days') ?? 84), 365);
+  // Buscar bookings con estado asistio en los últimos `days` días
+  const rows = await db
+    .select({ fecha: classSessions.fecha })
+    .from(bookings)
+    .innerJoin(classSessions, eq(bookings.sessionId, classSessions.id))
+    .where(and(
+      eq(bookings.userId, me.sub),
+      eq(bookings.estado, 'asistio'),
+      gte(classSessions.fecha, sql`(CURRENT_DATE - ${days}::int)::date::text`),
+    ));
+
+  // Agrupar por fecha: { 'yyyy-MM-dd': count }
+  const map: Record<string, number> = {};
+  for (const r of rows) {
+    map[r.fecha] = (map[r.fecha] ?? 0) + 1;
+  }
+  return c.json({ heatmap: map });
 });
 
 // Mi recorrido (timeline)
@@ -46,7 +80,7 @@ statsRouter.get('/me/journey', async (c) => {
 
 // Dashboard admin KPIs
 statsRouter.get('/admin/overview', requireAdmin, async (c) => {
-  const now = new Date();
+  const now = toZonedTime(new Date(), 'America/Bogota');
   const inicioMes = format(startOfMonth(now), 'yyyy-MM-dd');
   const finMes = format(endOfMonth(now), 'yyyy-MM-dd');
   const today = format(now, 'yyyy-MM-dd');

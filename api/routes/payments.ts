@@ -6,8 +6,9 @@ import { db } from '../db/client';
 import { payments, userPlans, planTypes, users } from '../db/schema';
 import { requireAuth } from '../middleware/jwt';
 import { requireStaff } from '../middleware/rbac';
+import { paymentLimit } from '../middleware/rateLimit';
 import { createWompiCheckoutUrl, verifyWompiSignature, type WompiEvent } from '../services/wompi.service';
-import { sendPushToUser } from '../services/webpush.service';
+import { notifyUser } from '../services/webpush.service';
 import { randomToken } from '../lib/password';
 
 export const paymentsRouter = new Hono();
@@ -45,17 +46,17 @@ paymentsRouter.post('/wompi-webhook', async (c) => {
       : [];
     const nombre = planRow[0]?.nombre ?? 'tu plan';
     const fechaFin = planRow[0]?.fechaFin ?? '';
-    await sendPushToUser(payment.userId, 'pago_ok', {
+    await notifyUser(payment.userId, {
       title: '¡Pago recibido! 💪',
       body: `Tu ${nombre} está activo${fechaFin ? ` hasta ${fechaFin}` : ''}. ¡A entrenar!`,
       url: '/app/pagos',
-    });
+    }, { tipo: 'pago_ok' });
   } else if (newStatus === 'fallido') {
-    await sendPushToUser(payment.userId, 'pago_fail', {
+    await notifyUser(payment.userId, {
       title: 'Problema con tu pago ⚠️',
       body: 'Hubo un problema procesando tu pago. Intenta de nuevo o contacta al club.',
       url: '/app/pagos',
-    });
+    }, { tipo: 'pago_fail' });
   }
   return c.json({ ok: true });
 });
@@ -75,6 +76,7 @@ paymentsRouter.get('/me', async (c) => {
       notas: payments.notas,
       createdAt: payments.createdAt,
       userPlanId: payments.userPlanId,
+      referenciaExterna: payments.referenciaExterna,
     })
     .from(payments)
     .where(eq(payments.userId, me.sub))
@@ -88,7 +90,7 @@ const intentSchema = z.object({
   metodo: z.enum(['wompi_card', 'wompi_nequi', 'wompi_pse']).default('wompi_card'),
 });
 
-paymentsRouter.post('/wompi/intent', zValidator('json', intentSchema), async (c) => {
+paymentsRouter.post('/wompi/intent', paymentLimit, zValidator('json', intentSchema), async (c) => {
   const me = c.get('user');
   const { userPlanId, metodo } = c.req.valid('json');
   const planRow = await db.select().from(userPlans).where(and(eq(userPlans.id, userPlanId), eq(userPlans.userId, me.sub))).limit(1);
@@ -105,10 +107,12 @@ paymentsRouter.post('/wompi/intent', zValidator('json', intentSchema), async (c)
     referenciaExterna: reference,
   });
 
+  const appUrl = process.env.PUBLIC_APP_URL ?? 'https://fitvang.vercel.app';
   const checkoutUrl = await createWompiCheckoutUrl({
     reference,
     amountInCents: planRow[0].precioCopAplicado * 100,
     customerEmail: userRow[0]?.email ?? 'cliente@fitvang.com',
+    redirectUrl: `${appUrl}/app/pagos?resultado=ok&ref=${reference}`,
   });
   return c.json({ reference, checkoutUrl });
 });
@@ -117,8 +121,8 @@ paymentsRouter.post('/wompi/intent', zValidator('json', intentSchema), async (c)
 const cashSchema = z.object({
   userId: z.string().uuid(),
   userPlanId: z.string().uuid().optional(),
-  montoCop: z.number().int().positive(),
-  notas: z.string().optional(),
+  montoCop: z.number().int().positive().max(100_000_000),
+  notas: z.string().trim().max(500).optional(),
 });
 paymentsRouter.post('/efectivo', requireStaff, zValidator('json', cashSchema), async (c) => {
   const me = c.get('user');
@@ -140,11 +144,11 @@ paymentsRouter.post('/efectivo', requireStaff, zValidator('json', cashSchema), a
     await db.update(userPlans).set({ estado: 'activo' }).where(eq(userPlans.id, body.userPlanId));
   }
 
-  await sendPushToUser(body.userId, 'pago_efectivo', {
+  await notifyUser(body.userId, {
     title: '¡Pago recibido en efectivo! ✅',
     body: `Tu pago de $${body.montoCop.toLocaleString('es-CO')} COP fue registrado por ${me.nombre}.`,
     url: '/app/pagos',
-  });
+  }, { tipo: 'pago_efectivo' });
   return c.json({ id: pay.id });
 });
 

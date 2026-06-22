@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast, Toaster } from 'sonner';
 import { api, ApiError } from '@/lib/api';
@@ -13,6 +14,7 @@ export default function LoginForm({ next }: { next?: string }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -39,22 +41,24 @@ export default function LoginForm({ next }: { next?: string }) {
     <>
       <Toaster theme="dark" position="top-center" />
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="w-full max-w-sm mx-auto"
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        className="relative w-full max-w-sm mx-auto rounded-2xl bg-black/40 backdrop-blur-2xl border border-white/[0.05] p-8 shadow-[0_24px_64px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.04)]"
       >
         {/* Logo + tagline */}
-        <div className="text-center mb-10">
+        <div className="text-center mb-8">
           <div className="relative inline-block">
+            {/* Glow halo behind logo */}
+            <div className="absolute inset-0 rounded-full bg-primary/20 blur-2xl scale-110 pointer-events-none" />
             <img
               src="/icons/logo.png"
               alt="Fitvang"
-              className="h-24 w-auto object-contain mx-auto drop-shadow-[0_0_24px_rgba(61,196,219,0.35)]"
+              className="relative h-24 w-auto object-contain mx-auto drop-shadow-[0_0_32px_rgba(61,196,219,0.55)]"
             />
           </div>
           <p className="mt-4 text-[11px] uppercase tracking-widest text-muted-foreground">
-            Centro de Entrenamiento · Cali
+            Centro de Entrenamiento
           </p>
         </div>
 
@@ -78,15 +82,26 @@ export default function LoginForm({ next }: { next?: string }) {
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
               Contraseña
             </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              className="w-full h-12 px-4 rounded-xl bg-card border border-border focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition text-sm"
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                className="w-full h-12 px-4 pr-11 rounded-xl bg-card border border-border focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition text-sm"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                tabIndex={-1}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           <button

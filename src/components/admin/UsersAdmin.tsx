@@ -54,7 +54,7 @@ export function UsersAdmin() {
       </div>
       <div className="space-y-2">
         {users.data?.users.map((u) => (
-          <Card key={u.id} className="flex items-center gap-3 py-3">
+          <Card key={u.id} className="relative flex items-center gap-3 py-3">
             <div className="size-10 rounded-full bg-white/10 grid place-items-center text-sm font-bold">
               {u.nombre.split(' ').map((s) => s[0]).slice(0, 2).join('')}
             </div>
@@ -131,7 +131,13 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     acudienteId: '',
   });
   const create = useMutation({
-    mutationFn: () => api.post<{ user: { id: string }; passwordTemporal?: string }>('/users', form),
+    mutationFn: () => {
+      const payload: Record<string, unknown> = { ...form };
+      if (!payload.acudienteId) delete payload.acudienteId;
+      if (!payload.telefono) delete payload.telefono;
+      if (!payload.fechaNacimiento) delete payload.fechaNacimiento;
+      return api.post<{ user: { id: string }; passwordTemporal?: string }>('/users', payload);
+    },
     onSuccess: (d) => onSuccess(d.passwordTemporal),
     onError: () => toast.error('No se pudo crear el usuario'),
   });

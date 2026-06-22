@@ -10,30 +10,16 @@ import { verifyPassword, randomToken, sha256 } from '../lib/password';
 import { setAuthCookies, clearAuthCookies } from '../lib/cookies';
 import { REFRESH_COOKIE, REFRESH_TTL_S } from '../lib/env';
 import { requireAuth } from '../middleware/jwt';
+import { loginLimit } from '../middleware/rateLimit';
 
 export const authRouter = new Hono();
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
   password: z.string().min(1),
 });
 
-const rateMap = new Map<string, { count: number; resetAt: number }>();
-function rateLimit(ip: string, max = 5, windowMs = 60_000): boolean {
-  const now = Date.now();
-  const cur = rateMap.get(ip);
-  if (!cur || cur.resetAt < now) {
-    rateMap.set(ip, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-  if (cur.count >= max) return false;
-  cur.count++;
-  return true;
-}
-
-authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
-  const ip = c.req.header('x-forwarded-for') ?? 'unknown';
-  if (!rateLimit(ip)) return c.json({ error: 'too_many_attempts' }, 429);
+authRouter.post('/login', loginLimit, zValidator('json', loginSchema), async (c) => {
 
   const { email, password } = c.req.valid('json');
   const rows = await db.select().from(users).where(eq(users.email, email.toLowerCase())).limit(1);

@@ -11,11 +11,14 @@ import {
   Calendar,
   BarChart2,
   CreditCard,
+  User,
   LayoutDashboard,
   Users2,
   BookOpen,
   Wallet,
   Tag,
+  Share,
+  X,
 } from 'lucide-react';
 
 interface Props {
@@ -29,6 +32,7 @@ const APP_TABS = [
   { label: 'Horarios', href: '/app/horarios', icon: Calendar },
   { label: 'Scoring', href: '/app/asistencias', icon: BarChart2 },
   { label: 'Pagos', href: '/app/pagos', icon: CreditCard },
+  { label: 'Perfil', href: '/app/perfil', icon: User },
 ];
 
 const COACH_TABS = [
@@ -87,9 +91,39 @@ function BottomNav({ variant }: { variant: 'app' | 'coach' | 'admin' }) {
   );
 }
 
+// Detecta si es iOS Safari fuera de modo standalone (candidato a instalar)
+function useIosInstallBanner() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = ('standalone' in navigator) && (navigator as any).standalone;
+    const dismissed = sessionStorage.getItem('pwa-banner-dismissed');
+    if (isIos && !isStandalone && !dismissed) setShow(true);
+  }, []);
+  return { show, dismiss: () => { sessionStorage.setItem('pwa-banner-dismissed', '1'); setShow(false); } };
+}
+
+function IosBanner({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div className="fixed bottom-20 left-4 right-4 z-50 bg-card border border-border rounded-2xl p-4 shadow-xl flex items-start gap-3">
+      <img src="/icons/icon-192.png" alt="Fitvang" className="w-10 h-10 rounded-xl shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-foreground">Instala Fitvang</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Toca <Share size={11} className="inline mx-0.5" /> y luego <strong>"Agregar a inicio"</strong>
+        </p>
+      </div>
+      <button onClick={onDismiss} className="text-muted-foreground hover:text-foreground p-1">
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
+
 function Shell({ user, variant, children }: Props) {
   const setUser = useAuth((s) => s.setUser);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const { show: showIosBanner, dismiss: dismissIosBanner } = useIosInstallBanner();
 
   useEffect(() => {
     setUser(user);
@@ -159,6 +193,7 @@ function Shell({ user, variant, children }: Props) {
       <BottomNav variant={variant} />
 
       <PushPromptModal open={showPushPrompt} onClose={() => setShowPushPrompt(false)} />
+      {showIosBanner && <IosBanner onDismiss={dismissIosBanner} />}
     </div>
   );
 }

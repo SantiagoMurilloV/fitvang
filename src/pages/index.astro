@@ -13,7 +13,14 @@ if (payload) {
 const next = Astro.url.searchParams.get('next') ?? undefined;
 ---
 <RootLayout title="Fitvang — Entrar">
-  <main class="min-h-screen flex flex-col items-center justify-center p-6">
+  <main class="relative min-h-screen flex flex-col items-center justify-center p-6 overflow-hidden">
+    <!-- Ambient depth layers -->
+    <div class="pointer-events-none absolute -top-48 -left-48 h-[700px] w-[700px] rounded-full bg-primary/[0.06] blur-[140px]" />
+    <div class="pointer-events-none absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-primary/[0.05] blur-[120px]" />
+    <div class="pointer-events-none absolute h-[350px] w-[350px] rounded-full bg-primary/[0.04] blur-[90px]" />
+    <!-- Subtle grid texture -->
+    <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:48px_48px]" />
+
     <LoginForm client:load next={next} />
   </main>
 </RootLayout>

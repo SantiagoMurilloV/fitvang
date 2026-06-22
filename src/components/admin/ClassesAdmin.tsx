@@ -37,7 +37,10 @@ interface Session {
   capacidadMax: number;
 }
 
-const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const DIAS: Record<string, string> = {
+  lunes: 'Lun', martes: 'Mar', miercoles: 'Mié', jueves: 'Jue',
+  viernes: 'Vie', sabado: 'Sáb', domingo: 'Dom',
+};
 
 const ESTADO_STYLES: Record<Session['estado'], string> = {
   programada: 'bg-primary/15 text-primary border-primary/30',

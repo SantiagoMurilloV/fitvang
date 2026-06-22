@@ -43,7 +43,7 @@ export function AdminDashboard() {
   async function generateSessions() {
     setGenerating(true);
     try {
-      await api.post('/classes/generate', { days: 30 });
+      await api.post('/classes/generate?days=30');
       toast.success('Sesiones generadas para los próximos 30 días ✅');
     } catch {
       toast.error('No se pudieron generar las sesiones');
@@ -57,7 +57,7 @@ export function AdminDashboard() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold">Fitvang</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Cl. 13b #37-86, El Dorado · Cali</p>
+
       </div>
 
       {/* KPI 2×2 grid */}

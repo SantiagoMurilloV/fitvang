@@ -21,6 +21,25 @@ interface SessionRow {
   estado: string;
 }
 
+type FilterKey = 'todos' | 'funcional' | 'futbol' | 'kids';
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: 'todos', label: 'Todos' },
+  { key: 'funcional', label: 'Funcional' },
+  { key: 'futbol', label: 'Fútbol' },
+  { key: 'kids', label: 'Kids' },
+];
+
+function matchesFilter(s: SessionRow, filter: FilterKey): boolean {
+  if (filter === 'todos') return true;
+  const slug = s.trainingSlug.toLowerCase();
+  const name = s.nombre.toLowerCase();
+  if (filter === 'funcional') return slug.includes('funcional') && !slug.includes('futbol') && !name.includes('kids');
+  if (filter === 'futbol') return slug.includes('futbol') || name.includes('fútbol') || name.includes('futbol');
+  if (filter === 'kids') return slug.includes('kids') || name.includes('kids');
+  return true;
+}
+
 function formatDayHeader(fecha: string, today: string): string {
   const isToday = fecha === today;
   const date = new Date(fecha + 'T12:00');
@@ -34,6 +53,8 @@ function formatDayHeader(fecha: string, today: string): string {
 export function SchedulePicker() {
   const qc = useQueryClient();
   const [weekOffset, setWeekOffset] = useState(0);
+  const [filter, setFilter] = useState<FilterKey>('todos');
+
   const monday = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
   const from = format(monday, 'yyyy-MM-dd');
   const to = format(addDays(monday, 6), 'yyyy-MM-dd');
@@ -78,8 +99,11 @@ export function SchedulePicker() {
     },
   });
 
+  const allSessions = sessions.data?.sessions ?? [];
+  const filtered = allSessions.filter((s) => matchesFilter(s, filter));
+
   const groups: Record<string, SessionRow[]> = {};
-  for (const s of sessions.data?.sessions ?? []) {
+  for (const s of filtered) {
     (groups[s.fecha] ??= []).push(s);
   }
 
@@ -114,6 +138,24 @@ export function SchedulePicker() {
         {format(monday, 'd MMM')} – {format(addDays(monday, 6), 'd MMM')}
       </p>
 
+      {/* Filter pills */}
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setFilter(f.key)}
+            className={cn(
+              'shrink-0 px-4 h-8 rounded-full text-xs font-medium transition-all',
+              filter === f.key
+                ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/30'
+                : 'bg-card border border-border text-muted-foreground hover:border-primary hover:text-foreground',
+            )}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {/* Sessions */}
       <div className="space-y-6">
         {sessions.isLoading && (
@@ -132,7 +174,9 @@ export function SchedulePicker() {
         )}
 
         {Object.entries(groups).length === 0 && !sessions.isLoading && (
-          <p className="text-center text-muted-foreground py-12">Sin clases en esta semana.</p>
+          <p className="text-center text-muted-foreground py-12">
+            {filter !== 'todos' ? `Sin clases de ${FILTERS.find((f) => f.key === filter)?.label} esta semana.` : 'Sin clases en esta semana.'}
+          </p>
         )}
 
         {Object.entries(groups).map(([fecha, list]) => (
@@ -155,10 +199,7 @@ export function SchedulePicker() {
                   <motion.div key={s.id} whileTap={{ scale: 0.99 }}>
                     <div className="rounded-2xl bg-card border border-border overflow-hidden flex">
                       {/* Color accent strip */}
-                      <div
-                        className="w-1 shrink-0"
-                        style={{ background: s.trainingColor }}
-                      />
+                      <div className="w-1 shrink-0" style={{ background: s.trainingColor }} />
 
                       <div className="flex-1 p-4 flex items-center gap-3">
                         <div className="flex-1 min-w-0">

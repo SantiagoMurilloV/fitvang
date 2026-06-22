@@ -38,14 +38,14 @@ plansRouter.get('/types', async (c) => {
 
 // CREATE plan type
 const planTypeSchema = z.object({
-  nombre: z.string().min(2),
+  nombre: z.string().trim().min(2).max(100),
   trainingTypeId: z.string().uuid(),
   modalidad: z.enum(['individual', 'pareja', 'amigos']),
-  precioBaseCop: z.number().int().positive(),
+  precioBaseCop: z.number().int().positive().max(100_000_000),
   minPersonas: z.number().int().min(1).default(1),
-  maxPersonas: z.number().int().nullable().optional(),
-  duracionDias: z.number().int().positive().default(30),
-  descripcion: z.string().optional(),
+  maxPersonas: z.number().int().max(100).nullable().optional(),
+  duracionDias: z.number().int().positive().max(365).default(30),
+  descripcion: z.string().trim().max(500).optional(),
   activo: z.boolean().default(true),
 });
 plansRouter.post('/types', requireAdmin, zValidator('json', planTypeSchema), async (c) => {
@@ -64,8 +64,8 @@ const assignSchema = z.object({
   userId: z.string().uuid(),
   planTypeId: z.string().uuid(),
   planGroupId: z.string().uuid().optional(),
-  precioCopAplicado: z.number().int().positive().optional(),
-  notasAdmin: z.string().optional(),
+  precioCopAplicado: z.number().int().positive().max(100_000_000).optional(),
+  notasAdmin: z.string().trim().max(500).optional(),
 });
 plansRouter.post('/assign', requireAdmin, zValidator('json', assignSchema), async (c) => {
   const me = c.get('user');
@@ -131,8 +131,8 @@ plansRouter.get('/me', async (c) => {
 // Grupos
 const groupSchema = z.object({
   planTypeId: z.string().uuid(),
-  nombreGrupo: z.string().optional(),
-  descuentoEspecialCop: z.number().int().min(0).default(0),
+  nombreGrupo: z.string().trim().max(100).optional(),
+  descuentoEspecialCop: z.number().int().min(0).max(100_000_000).default(0),
 });
 plansRouter.post('/groups', requireAdmin, zValidator('json', groupSchema), async (c) => {
   const me = c.get('user');

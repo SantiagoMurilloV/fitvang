@@ -11,7 +11,7 @@ import { Button } from '@/components/shared/Button';
 interface PlanType {
   id: string;
   nombre: string;
-  modalidad: 'Individual' | 'Pareja' | 'Amigos';
+  modalidad: 'individual' | 'pareja' | 'amigos';
   precioBaseCop: number;
   trainingSlug: string;
   trainingNombre: string;
@@ -26,9 +26,15 @@ function formatCop(n: number) {
 }
 
 const MODALIDAD_STYLES: Record<PlanType['modalidad'], string> = {
-  Individual: 'bg-primary/10 text-primary border-primary/30',
-  Pareja: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
-  Amigos: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  individual: 'bg-primary/10 text-primary border-primary/30',
+  pareja: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
+  amigos: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+};
+
+const MODALIDAD_LABEL: Record<PlanType['modalidad'], string> = {
+  individual: 'Individual',
+  pareja: 'Pareja',
+  amigos: 'Amigos',
 };
 
 /* ─── Plan Card ─────────────────────────────────────────────────────── */
@@ -71,7 +77,7 @@ function PlanCard({ plan }: { plan: PlanType }) {
             <span
               className={`text-[10px] px-2 py-0.5 rounded-full border ${MODALIDAD_STYLES[plan.modalidad]}`}
             >
-              {plan.modalidad}
+              {MODALIDAD_LABEL[plan.modalidad] ?? plan.modalidad}
             </span>
             <span className="text-[10px] text-muted-foreground border border-border rounded-full px-2 py-0.5">
               {formatCop(plan.precioBaseCop)}

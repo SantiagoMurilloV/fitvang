@@ -6,6 +6,7 @@ import { SchedulePicker } from './user/SchedulePicker';
 import { ScoringView } from './user/ScoringView';
 import { PaymentsView } from './user/PaymentsView';
 import { JourneyView } from './user/JourneyView';
+import { ProfileView } from './user/ProfileView';
 import { CoachDashboard } from './coach/CoachDashboard';
 import { AdminDashboard } from './admin/AdminDashboard';
 import { UsersAdmin } from './admin/UsersAdmin';
@@ -19,6 +20,7 @@ const VIEWS = {
   'user/scoring': { variant: 'app' as const, render: () => <ScoringView /> },
   'user/pagos': { variant: 'app' as const, render: () => <PaymentsView /> },
   'user/recorrido': { variant: 'app' as const, render: () => <JourneyView /> },
+  'user/perfil': { variant: 'app' as const, render: () => <ProfileView /> },
   'coach/home': { variant: 'coach' as const, render: () => <CoachDashboard /> },
   'admin/home': { variant: 'admin' as const, render: () => <AdminDashboard /> },
   'admin/users': { variant: 'admin' as const, render: () => <UsersAdmin /> },
