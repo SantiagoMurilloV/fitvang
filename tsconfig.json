@@ -1,14 +1,13 @@
 {
   "extends": "astro/tsconfigs/strict",
-  "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist", "figma-ui", "node_modules"],
+  "include": [".astro/types.d.ts", "src/**/*", "public/**/*"],
+  "exclude": ["dist", "node_modules", "api"],
   "compilerOptions": {
     "jsx": "react-jsx",
     "jsxImportSource": "react",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@api/*": ["api/*"]
+      "@/*": ["src/*"]
     },
     "allowImportingTsExtensions": false,
     "verbatimModuleSyntax": false
