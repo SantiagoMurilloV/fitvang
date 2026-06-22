@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { AppPage } from './shared/AppPage';
 import { ErrorBoundary } from './shared/ErrorBoundary';
 import type { SessionUser } from '@/lib/auth-store';
+import { api } from '@/lib/api';
 import { UserDashboard } from './user/UserDashboard';
 import { SchedulePicker } from './user/SchedulePicker';
 import { ScoringView } from './user/ScoringView';
@@ -15,27 +17,58 @@ import { PaymentsAdmin } from './admin/PaymentsAdmin';
 import { PlansAdmin } from './admin/PlansAdmin';
 
 const VIEWS = {
-  'user/home': { variant: 'app' as const, render: () => <UserDashboard /> },
-  'user/horarios': { variant: 'app' as const, render: () => <SchedulePicker /> },
-  'user/scoring': { variant: 'app' as const, render: () => <ScoringView /> },
-  'user/pagos': { variant: 'app' as const, render: () => <PaymentsView /> },
-  'user/recorrido': { variant: 'app' as const, render: () => <JourneyView /> },
-  'user/perfil': { variant: 'app' as const, render: () => <ProfileView /> },
-  'coach/home': { variant: 'coach' as const, render: () => <CoachDashboard /> },
-  'admin/home': { variant: 'admin' as const, render: () => <AdminDashboard /> },
-  'admin/users': { variant: 'admin' as const, render: () => <UsersAdmin /> },
-  'admin/clases': { variant: 'admin' as const, render: () => <ClassesAdmin /> },
-  'admin/pagos': { variant: 'admin' as const, render: () => <PaymentsAdmin /> },
-  'admin/planes': { variant: 'admin' as const, render: () => <PlansAdmin /> },
+  'user/home': { variant: 'app' as const, allowedRoles: ['super_admin', 'coach', 'user'] as const, render: () => <UserDashboard /> },
+  'user/horarios': { variant: 'app' as const, allowedRoles: ['super_admin', 'coach', 'user'] as const, render: () => <SchedulePicker /> },
+  'user/scoring': { variant: 'app' as const, allowedRoles: ['super_admin', 'coach', 'user'] as const, render: () => <ScoringView /> },
+  'user/pagos': { variant: 'app' as const, allowedRoles: ['super_admin', 'coach', 'user'] as const, render: () => <PaymentsView /> },
+  'user/recorrido': { variant: 'app' as const, allowedRoles: ['super_admin', 'coach', 'user'] as const, render: () => <JourneyView /> },
+  'user/perfil': { variant: 'app' as const, allowedRoles: ['super_admin', 'coach', 'user'] as const, render: () => <ProfileView /> },
+  'coach/home': { variant: 'coach' as const, allowedRoles: ['super_admin', 'coach'] as const, render: () => <CoachDashboard /> },
+  'admin/home': { variant: 'admin' as const, allowedRoles: ['super_admin'] as const, render: () => <AdminDashboard /> },
+  'admin/users': { variant: 'admin' as const, allowedRoles: ['super_admin'] as const, render: () => <UsersAdmin /> },
+  'admin/clases': { variant: 'admin' as const, allowedRoles: ['super_admin'] as const, render: () => <ClassesAdmin /> },
+  'admin/pagos': { variant: 'admin' as const, allowedRoles: ['super_admin'] as const, render: () => <PaymentsAdmin /> },
+  'admin/planes': { variant: 'admin' as const, allowedRoles: ['super_admin'] as const, render: () => <PlansAdmin /> },
 } as const;
 
 export type ViewKey = keyof typeof VIEWS;
 
-export default function Entry({ view, user }: { view: ViewKey; user: SessionUser }) {
+type Role = 'super_admin' | 'coach' | 'user';
+
+export default function Entry({ view }: { view: ViewKey }) {
   const v = VIEWS[view];
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    api.get<{ user: SessionUser }>('/auth/me')
+      .then(({ user: u }) => {
+        const allowed = (v.allowedRoles as readonly string[]).includes(u.rol);
+        if (!allowed) {
+          const fallback = u.rol === 'super_admin' ? '/admin' : u.rol === 'coach' ? '/coach' : '/app';
+          window.location.replace(fallback);
+          return;
+        }
+        setUser(u);
+        setChecking(false);
+      })
+      .catch(() => {
+        const next = encodeURIComponent(window.location.pathname);
+        window.location.replace(`/?next=${next}`);
+      });
+  }, []);
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <ErrorBoundary>
-      <AppPage user={user} variant={v.variant}>
+      <AppPage user={user!} variant={v.variant}>
         <ErrorBoundary>
           {v.render()}
         </ErrorBoundary>

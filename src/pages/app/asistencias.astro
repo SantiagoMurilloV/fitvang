@@ -1,11 +1,7 @@
 ---
 import RootLayout from '@/layouts/RootLayout.astro';
 import Entry from '@/components/entry';
-import { requireAuth } from '@/lib/requireAuth';
-const { user: authUser, redirect } = await requireAuth(Astro.request, ['super_admin', 'coach', 'user']);
-if (redirect) return Astro.redirect(redirect);
-const user = { id: authUser!.sub, nombre: authUser!.nombre, email: authUser!.email, rol: authUser!.rol };
 ---
 <RootLayout title="Fitvang — Mi scoring">
-  <Entry client:load view="user/scoring" user={user} />
+  <Entry client:load view="user/scoring" />
 </RootLayout>
