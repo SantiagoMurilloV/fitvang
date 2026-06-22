@@ -1,8 +1,10 @@
 ---
 import RootLayout from '@/layouts/RootLayout.astro';
 import Entry from '@/components/entry';
-const u = Astro.locals.user!;
-const user = { id: u.sub, nombre: u.nombre, email: '', rol: u.rol };
+import { requireAuth } from '@/lib/requireAuth';
+const { user: authUser, redirect } = await requireAuth(Astro.request, ['super_admin']);
+if (redirect) return Astro.redirect(redirect);
+const user = { id: authUser!.sub, nombre: authUser!.nombre, email: authUser!.email, rol: authUser!.rol };
 ---
 <RootLayout title="Fitvang — Usuarios">
   <Entry client:load view="admin/users" user={user} />
