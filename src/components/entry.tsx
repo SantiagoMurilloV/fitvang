@@ -45,20 +45,27 @@ export default function Entry({ view }: { view: ViewKey }) {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    const next = encodeURIComponent(window.location.pathname);
+
+    function applyUser(u: SessionUser) {
+      const allowed = (v.allowedRoles as readonly string[]).includes(u.rol);
+      if (!allowed) {
+        const fallback = u.rol === 'super_admin' ? '/admin' : u.rol === 'coach' ? '/coach' : '/app';
+        window.location.replace(fallback);
+        return;
+      }
+      setUser(u);
+      setChecking(false);
+    }
+
     api.get<{ user: SessionUser }>('/auth/me')
-      .then(({ user: u }) => {
-        const allowed = (v.allowedRoles as readonly string[]).includes(u.rol);
-        if (!allowed) {
-          const fallback = u.rol === 'super_admin' ? '/admin' : u.rol === 'coach' ? '/coach' : '/app';
-          window.location.replace(fallback);
-          return;
-        }
-        setUser(u);
-        setChecking(false);
-      })
+      .then(({ user: u }) => applyUser(u))
       .catch(() => {
-        const next = encodeURIComponent(window.location.pathname);
-        window.location.replace(`/?next=${next}`);
+        // Access token expirado — intentar renovar antes de botar al login
+        api.post('/auth/refresh')
+          .then(() => api.get<{ user: SessionUser }>('/auth/me'))
+          .then(({ user: u }) => applyUser(u))
+          .catch(() => window.location.replace(`/?next=${next}`));
       });
   }, []);
 
