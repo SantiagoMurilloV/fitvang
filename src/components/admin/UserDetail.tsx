@@ -3,9 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import {
-  X, ChevronLeft, Pencil, Check, ToggleLeft, ToggleRight,
+  ChevronLeft, Check, ToggleLeft, ToggleRight,
   User, Mail, Phone, CreditCard, Calendar, Weight, Ruler,
-  Shield, Tag, Clock, Eye, EyeOff,
+  Shield, Tag, Eye, EyeOff, Camera, Loader2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/shared/Button';
@@ -54,6 +54,24 @@ interface ScoringData {
   asistenciasMes: number;
   rachaActual: number;
   puntajeMes: number;
+}
+
+const CLOUDINARY_CLOUD = 'dsg6dulng';
+const CLOUDINARY_PRESET = 'fitvang_avatars';
+
+async function uploadAvatar(file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('upload_preset', CLOUDINARY_PRESET);
+  fd.append('folder', 'fitvang/avatars');
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, {
+    method: 'POST',
+    body: fd,
+  });
+  if (!res.ok) throw new Error('Upload failed');
+  const data = await res.json();
+  // URL con transformación: face crop, 200×200, formato webp, calidad auto
+  return data.secure_url.replace('/upload/', '/upload/c_fill,g_face,w_200,h_200,f_webp,q_auto/');
 }
 
 function formatCop(n: number) {
@@ -172,11 +190,29 @@ function AssignPlanPanel({ userId, onAssigned }: { userId: string; onAssigned: (
 /* ─── Vista detalle usuario ─────────────────────────────────────────── */
 export function UserDetail({ userId, onClose }: { userId: string; onClose: () => void }) {
   const qc = useQueryClient();
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['user-ficha', userId],
     queryFn: () => api.get<{ user: ProfileUser; planActivo: PlanActivo | null }>(`/users/${userId}/ficha`),
   });
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const url = await uploadAvatar(file);
+      await api.patch(`/users/${userId}`, { avatarUrl: url });
+      refetch();
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+      toast.success('Foto actualizada');
+    } catch {
+      toast.error('No se pudo subir la foto');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
 
   const { data: scoringData } = useQuery({
     queryKey: ['user-scoring', userId],
@@ -270,9 +306,22 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
 
             {/* Avatar + stats */}
             <div className="flex items-center gap-4 py-2">
-              <div className="size-16 rounded-full bg-primary/20 grid place-items-center text-xl font-bold text-primary shrink-0">
-                {initials}
-              </div>
+              <label className="relative size-16 rounded-full shrink-0 cursor-pointer group">
+                {u.avatarUrl ? (
+                  <img src={u.avatarUrl} alt={u.nombre} className="size-16 rounded-full object-cover" />
+                ) : (
+                  <div className="size-16 rounded-full bg-primary/20 grid place-items-center text-xl font-bold text-primary">
+                    {initials}
+                  </div>
+                )}
+                <div className={`absolute inset-0 rounded-full bg-black/50 flex items-center justify-center transition-opacity ${uploadingAvatar ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                  {uploadingAvatar
+                    ? <Loader2 size={18} className="text-white animate-spin" />
+                    : <Camera size={18} className="text-white" />
+                  }
+                </div>
+                <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} disabled={uploadingAvatar} />
+              </label>
               <div>
                 <p className="font-bold text-lg leading-tight">{u.nombre}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
