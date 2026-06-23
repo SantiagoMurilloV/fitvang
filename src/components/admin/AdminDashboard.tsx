@@ -1,9 +1,22 @@
 import { useQuery } from '@tanstack/react-query';
-import { Users2, Activity, DollarSign, BookOpen, TrendingUp, Trophy } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users2, Activity, DollarSign, BookOpen, TrendingUp, Trophy, Radio } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatCop } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+function nowInColombia() {
+  // Colombia = UTC-5, sin cambio de horario
+  const now = new Date();
+  const col = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+  return col;
+}
+
+function toMinutes(hhmm: string) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
 
 interface Overview {
   usuariosActivos: number;
@@ -15,11 +28,13 @@ interface Overview {
 interface Session {
   id: string;
   nombre: string;
+  fecha: string;
   horaInicio: string;
   horaFin: string;
   trainingColor: string;
   ocupados: number;
   capacidadMax: number;
+  estado: string;
 }
 
 interface KpiCardProps {
@@ -162,9 +177,15 @@ function StudentsProgressModal({ onClose }: { onClose: () => void }) {
 }
 
 export function AdminDashboard() {
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const [now, setNow] = useState(nowInColombia);
+  const today = format(now, 'yyyy-MM-dd');
   const [showFinancial, setShowFinancial] = useState(false);
   const [showProgress, setShowProgress] = useState(false);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(nowInColombia()), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   const { data: overview } = useQuery({
     queryKey: ['admin-overview'],
@@ -178,7 +199,13 @@ export function AdminDashboard() {
     refetchInterval: 30_000,
   });
 
-  const liveSessions = sessionsData?.sessions.filter((s: any) => s.estado === 'programada') ?? [];
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const liveSessions = (sessionsData?.sessions ?? []).filter((s) =>
+    s.estado === 'programada' &&
+    s.fecha === today &&
+    toMinutes(s.horaInicio) <= nowMin &&
+    nowMin < toMinutes(s.horaFin)
+  );
 
   return (
     <>
@@ -227,10 +254,14 @@ export function AdminDashboard() {
           <TrendingUp className="size-4 text-amber-400" />
         </button>
 
-        {/* Clases en curso ahora */}
+        {/* Clases en vivo */}
         {liveSessions.length > 0 && (
           <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">En curso ahora</h2>
+            <div className="flex items-center gap-2">
+              <Radio size={13} className="text-red-400 animate-pulse" />
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-red-400">En vivo</h2>
+              <span className="text-xs text-muted-foreground ml-auto">{format(now, 'HH:mm')}</span>
+            </div>
             <div className="space-y-2">
               {liveSessions.map((s) => <LiveClassCard key={s.id} session={s} />)}
             </div>
@@ -244,5 +275,3 @@ export function AdminDashboard() {
   );
 }
 
-// Needed for useState
-import { useState } from 'react';

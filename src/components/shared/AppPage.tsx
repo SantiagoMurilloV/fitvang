@@ -24,11 +24,12 @@ import {
   LogOut,
   Settings,
   Plus,
+  ChevronLeft,
 } from 'lucide-react';
 
 interface Props {
   user: SessionUser;
-  variant: 'app' | 'coach' | 'admin';
+  variant: 'app' | 'coach' | 'admin' | 'acudiente';
   children: ReactNode;
 }
 
@@ -44,6 +45,12 @@ const COACH_TABS = [
   { label: 'Hoy', href: '/coach', icon: LayoutDashboard, exact: true },
 ];
 
+const ACUDIENTE_TABS = [
+  { label: 'Inicio', href: '/acudiente', icon: Home, exact: true },
+  { label: 'Horarios', href: '/acudiente/horarios', icon: Calendar },
+  { label: 'Perfil', href: '/acudiente/perfil', icon: User },
+];
+
 const ADMIN_TABS = [
   { label: 'Inicio', href: '/admin', icon: LayoutDashboard, exact: true },
   { label: 'Usuarios', href: '/admin/usuarios', icon: Users2 },
@@ -53,7 +60,7 @@ const ADMIN_TABS = [
   { label: 'Config', href: '/admin/configuracion', icon: Settings },
 ];
 
-const VARIANT_TABS = { app: APP_TABS, coach: COACH_TABS, admin: ADMIN_TABS };
+const VARIANT_TABS = { app: APP_TABS, coach: COACH_TABS, admin: ADMIN_TABS, acudiente: ACUDIENTE_TABS };
 
 function isActive(href: string, exact?: boolean): boolean {
   if (typeof window === 'undefined') return false;
@@ -62,7 +69,7 @@ function isActive(href: string, exact?: boolean): boolean {
   return path === href || path.startsWith(href + '/');
 }
 
-function BottomNav({ variant }: { variant: 'app' | 'coach' | 'admin' }) {
+function BottomNav({ variant }: { variant: 'app' | 'coach' | 'admin' | 'acudiente' }) {
   const tabs = VARIANT_TABS[variant];
   return (
     <nav
@@ -152,13 +159,16 @@ async function handleLogout() {
 }
 
 // ── Configuración del header por ruta ──────────────────────────────────
+interface HeaderAction {
+  label: string;
+  event: string;
+  icon?: 'plus' | 'settings';
+}
 interface HeaderConfig {
-  title: string;           // título que aparece en el header
-  back?: string;           // href para flecha de regreso (si aplica)
-  action?: {
-    label: string;
-    event: string;   // nombre del CustomEvent a disparar
-  };
+  title: string;
+  back?: string;
+  action?: HeaderAction;
+  actions?: HeaderAction[];
 }
 
 function getHeaderConfig(variant: string): HeaderConfig {
@@ -170,7 +180,10 @@ function getHeaderConfig(variant: string): HeaderConfig {
     if (path === '/admin') return { title: '' };
     if (path.startsWith('/admin/usuarios')) return {
       title: 'Usuarios',
-      action: { label: 'Nuevo', event: 'fitvang:crear-usuario' },
+      actions: [
+        { label: 'Permisos', event: 'fitvang:abrir-permisos', icon: 'settings' as const },
+        { label: 'Nuevo', event: 'fitvang:crear-usuario', icon: 'plus' as const },
+      ],
     };
     if (path.startsWith('/admin/clases')) return {
       title: 'Clases',
@@ -178,6 +191,7 @@ function getHeaderConfig(variant: string): HeaderConfig {
     };
     if (path.startsWith('/admin/programacion')) return {
       title: 'Mis clases',
+      back: '/admin/clases',
       action: { label: 'Nueva clase', event: 'fitvang:crear-clase' },
     };
     if (path.startsWith('/admin/pagos')) return { title: 'Pagos' };
@@ -196,6 +210,13 @@ function getHeaderConfig(variant: string): HeaderConfig {
     if (path.startsWith('/app/pagos')) return { title: 'Pagos' };
     if (path.startsWith('/app/perfil')) return { title: 'Perfil' };
     if (path.startsWith('/app/recorrido')) return { title: 'Mi Recorrido' };
+  }
+
+  // Rutas acudiente
+  if (variant === 'acudiente') {
+    if (path === '/acudiente') return { title: '' };
+    if (path.startsWith('/acudiente/horarios')) return { title: 'Horarios' };
+    if (path.startsWith('/acudiente/perfil')) return { title: 'Perfil' };
   }
 
   // Rutas coach
@@ -223,7 +244,7 @@ function Shell({ user, variant, children }: Props) {
     }
   }, [user, setUser]);
 
-  const roleLabel: Record<string, string> = { app: 'Miembro', coach: 'Coach', admin: 'Admin' };
+  const roleLabel: Record<string, string> = { app: 'Miembro', coach: 'Coach', admin: 'Admin', acudiente: 'Acudiente' };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -232,26 +253,32 @@ function Shell({ user, variant, children }: Props) {
         style={{ paddingTop: 'env(safe-area-inset-top)', minHeight: 'calc(56px + env(safe-area-inset-top))' }}
       >
 
-        {/* Izquierda: logo (dashboard) o flecha+título (sección) */}
+        {/* Izquierda: logo (dashboard) | flecha+título (sección con back) | título solo */}
         {isDashboard ? (
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground border border-border rounded px-1.5 py-0.5">
             {roleLabel[variant] ?? variant}
           </span>
+        ) : header.back ? (
+          <a href={header.back} className="flex items-center gap-1 text-base font-bold hover:text-primary transition-colors">
+            <ChevronLeft size={20} className="text-muted-foreground" />
+            {header.title}
+          </a>
         ) : (
           <h1 className="text-base font-bold">{header.title}</h1>
         )}
 
         {/* Derecha: acción contextual + notificaciones + logout */}
         <div className="flex items-center gap-2">
-          {header.action && (
+          {(header.actions ?? (header.action ? [header.action] : [])).map((a) => (
             <button
-              onClick={() => window.dispatchEvent(new CustomEvent(header.action!.event))}
+              key={a.event}
+              onClick={() => window.dispatchEvent(new CustomEvent(a.event))}
               className="flex items-center gap-1 px-3 h-8 rounded-full bg-primary/10 border border-primary/30 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
             >
-              <Plus size={13} />
-              {header.action.label}
+              {a.icon !== 'settings' && <Plus size={13} />}
+              {a.label}
             </button>
-          )}
+          ))}
           <NotificationBell />
           <button
             onClick={handleLogout}

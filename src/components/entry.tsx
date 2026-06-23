@@ -9,6 +9,7 @@ import { ScoringView } from './user/ScoringView';
 import { PaymentsView } from './user/PaymentsView';
 import { JourneyView } from './user/JourneyView';
 import { ProfileView } from './user/ProfileView';
+import { AcudienteDashboard } from './acudiente/AcudienteDashboard';
 import { CoachDashboard } from './coach/CoachDashboard';
 import { AdminDashboard } from './admin/AdminDashboard';
 import { UsersAdmin } from './admin/UsersAdmin';
@@ -25,6 +26,9 @@ const VIEWS = {
   'user/pagos': { variant: 'app' as const, allowedRoles: ['super_admin', 'coach', 'user'] as const, render: () => <PaymentsView /> },
   'user/recorrido': { variant: 'app' as const, allowedRoles: ['super_admin', 'coach', 'user'] as const, render: () => <JourneyView /> },
   'user/perfil': { variant: 'app' as const, allowedRoles: ['super_admin', 'coach', 'user'] as const, render: () => <ProfileView /> },
+  'acudiente/home': { variant: 'acudiente' as const, allowedRoles: ['super_admin', 'user'] as const, render: () => <AcudienteDashboard /> },
+  'acudiente/horarios': { variant: 'acudiente' as const, allowedRoles: ['super_admin', 'user'] as const, render: () => <SchedulePicker /> },
+  'acudiente/perfil': { variant: 'acudiente' as const, allowedRoles: ['super_admin', 'user'] as const, render: () => <ProfileView /> },
   'coach/home': { variant: 'coach' as const, allowedRoles: ['super_admin', 'coach'] as const, render: () => <CoachDashboard /> },
   'admin/home': { variant: 'admin' as const, allowedRoles: ['super_admin'] as const, render: () => <AdminDashboard /> },
   'admin/users': { variant: 'admin' as const, allowedRoles: ['super_admin'] as const, render: () => <UsersAdmin /> },
@@ -50,7 +54,7 @@ export default function Entry({ view }: { view: ViewKey }) {
     function applyUser(u: SessionUser) {
       const allowed = (v.allowedRoles as readonly string[]).includes(u.rol);
       if (!allowed) {
-        const fallback = u.rol === 'super_admin' ? '/admin' : u.rol === 'coach' ? '/coach' : '/app';
+        const fallback = u.rol === 'super_admin' ? '/admin' : u.rol === 'coach' ? '/coach' : u.esAcudiente ? '/acudiente' : '/app';
         window.location.replace(fallback);
         return;
       }

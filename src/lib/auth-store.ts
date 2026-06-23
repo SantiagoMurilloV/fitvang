@@ -8,6 +8,7 @@ export interface SessionUser {
   rol: Role;
   avatarUrl?: string | null;
   esMenor?: boolean;
+  esAcudiente?: boolean;
 }
 
 interface AuthState {

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AnimatePresence } from 'motion/react';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { AnimatePresence, motion } from 'motion/react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { Search, Shield, Users2, Baby, UserCheck, HeartHandshake, ChevronRight } from 'lucide-react';
+import { Search, Shield, Users2, Baby, UserCheck, HeartHandshake, ChevronRight, X, Bell, Layers, Zap, SlidersHorizontal, Save } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card } from '@/components/shared/Card';
 import { UserDetail, CreateUserScreen } from './UserDetail';
@@ -16,6 +17,7 @@ interface UserRow {
   documento: string;
   rol: Role;
   esMenor: boolean;
+  esAcudiente: boolean;
   activo: boolean;
   avatarUrl?: string | null;
   createdAt: string;
@@ -40,13 +42,15 @@ function UserRow({ u, onSelect }: { u: UserRow; onSelect: () => void }) {
   const ROL_BADGE: Record<Role, string> = {
     super_admin: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
     coach: 'bg-green-500/15 text-green-300 border-green-500/30',
-    user: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
+    user: u.esAcudiente
+      ? 'bg-pink-500/15 text-pink-300 border-pink-500/30'
+      : 'bg-blue-500/10 text-blue-300 border-blue-500/20',
   };
 
   const ROL_LABEL: Record<Role, string> = {
     super_admin: 'Admin',
     coach: 'Coach',
-    user: u.esMenor ? 'Menor' : 'Cliente',
+    user: u.esMenor ? 'Menor' : u.esAcudiente ? 'Acudiente' : 'Cliente',
   };
 
   return (
@@ -70,12 +74,283 @@ function UserRow({ u, onSelect }: { u: UserRow; onSelect: () => void }) {
   );
 }
 
+// ── Permissions types ─────────────────────────────────────────────────────
+interface PermissionsForRole {
+  secciones: Record<string, boolean>;
+  acciones: Record<string, boolean>;
+  notificaciones: Record<string, boolean>;
+  limites: Record<string, number | null>;
+}
+interface RolePermissions {
+  user: PermissionsForRole;
+  coach: PermissionsForRole;
+  menor: PermissionsForRole;
+  acudiente: PermissionsForRole;
+}
+
+const DEFAULT_PERMISOS: RolePermissions = {
+  user: {
+    secciones: { dashboard: true, reservas: true, recorrido: true, perfil: true, clases: false, usuarios: false },
+    acciones: { reservar: true, cancelarReserva: true, subirFoto: true, tomarAsistencia: false, verFichaUsuario: false, cobrarEfectivo: false },
+    notificaciones: { recordatorioClase: true, cambioHorario: true, vencimientoPlan: true, bienvenida: true, nuevaReserva: false, cancelacionReserva: false, claseProxima: false },
+    limites: { reservasPorSemana: null, reservasSimultaneas: 2 },
+  },
+  coach: {
+    secciones: { dashboard: true, reservas: false, recorrido: false, perfil: true, clases: true, usuarios: true },
+    acciones: { reservar: false, cancelarReserva: false, subirFoto: true, tomarAsistencia: true, verFichaUsuario: true, cobrarEfectivo: true },
+    notificaciones: { recordatorioClase: false, cambioHorario: false, vencimientoPlan: false, bienvenida: true, nuevaReserva: true, cancelacionReserva: true, claseProxima: true },
+    limites: { reservasPorSemana: null, reservasSimultaneas: null },
+  },
+  menor: {
+    secciones: { dashboard: true, reservas: true, recorrido: true, perfil: true, clases: false, usuarios: false },
+    acciones: { reservar: true, cancelarReserva: false, subirFoto: true, tomarAsistencia: false, verFichaUsuario: false, cobrarEfectivo: false },
+    notificaciones: { recordatorioClase: true, cambioHorario: true, vencimientoPlan: true, bienvenida: true, nuevaReserva: false, cancelacionReserva: false, claseProxima: false },
+    limites: { reservasPorSemana: 5, reservasSimultaneas: 1 },
+  },
+  acudiente: {
+    secciones: { dashboard: true, reservas: false, recorrido: false, perfil: true, clases: false, usuarios: false, infoMenor: true, horariosMenor: true, asistenciasMenor: true },
+    acciones: { reservar: false, cancelarReserva: false, subirFoto: true, tomarAsistencia: false, verFichaUsuario: false, cobrarEfectivo: false },
+    notificaciones: { recordatorioClase: false, cambioHorario: true, vencimientoPlan: true, bienvenida: true, nuevaReserva: false, cancelacionReserva: false, claseProxima: false, asistenciaMenor: true, ausenciaMenor: true },
+    limites: { reservasPorSemana: null, reservasSimultaneas: null },
+  },
+};
+
+type PermRole = 'user' | 'coach' | 'menor' | 'acudiente';
+
+const PERM_ROLE_LABELS: Record<PermRole, string> = {
+  user: 'Cliente',
+  coach: 'Entrenador',
+  menor: 'Menor',
+  acudiente: 'Acudiente',
+};
+
+const SECTION_LABELS: { key: string; label: string; roles?: PermRole[] }[] = [
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'reservas', label: 'Reservas' },
+  { key: 'recorrido', label: 'Mi Recorrido' },
+  { key: 'perfil', label: 'Perfil' },
+  { key: 'clases', label: 'Clases', roles: ['coach'] },
+  { key: 'usuarios', label: 'Usuarios', roles: ['coach'] },
+  { key: 'infoMenor', label: 'Info del menor', roles: ['acudiente'] },
+  { key: 'horariosMenor', label: 'Horarios del menor', roles: ['acudiente'] },
+  { key: 'asistenciasMenor', label: 'Asistencias del menor', roles: ['acudiente'] },
+];
+
+const ACTION_LABELS: { key: string; label: string; roles?: PermRole[] }[] = [
+  { key: 'reservar', label: 'Reservar clases' },
+  { key: 'cancelarReserva', label: 'Cancelar reserva' },
+  { key: 'subirFoto', label: 'Subir foto de perfil' },
+  { key: 'tomarAsistencia', label: 'Tomar asistencia', roles: ['coach'] },
+  { key: 'verFichaUsuario', label: 'Ver ficha de usuario', roles: ['coach'] },
+  { key: 'cobrarEfectivo', label: 'Cobrar en efectivo', roles: ['coach'] },
+];
+
+const NOTIF_LABELS: { key: string; label: string; roles?: PermRole[] }[] = [
+  { key: 'recordatorioClase', label: 'Recordatorio de clase' },
+  { key: 'cambioHorario', label: 'Cambio de horario' },
+  { key: 'vencimientoPlan', label: 'Vencimiento de plan' },
+  { key: 'bienvenida', label: 'Bienvenida' },
+  { key: 'nuevaReserva', label: 'Nueva reserva', roles: ['coach'] },
+  { key: 'cancelacionReserva', label: 'Cancelación de reserva', roles: ['coach'] },
+  { key: 'claseProxima', label: 'Clase próxima', roles: ['coach'] },
+  { key: 'asistenciaMenor', label: 'Menor marcado presente en clase', roles: ['acudiente'] },
+  { key: 'ausenciaMenor', label: 'Menor no asistió a su clase', roles: ['acudiente'] },
+];
+
+const LIMIT_LABELS: { key: string; label: string; unit: string }[] = [
+  { key: 'reservasPorSemana', label: 'Reservas por semana', unit: 'clases' },
+  { key: 'reservasSimultaneas', label: 'Reservas simultáneas', unit: 'máx' },
+];
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${checked ? 'bg-cyan-500' : 'bg-white/10'}`}
+    >
+      <span
+        className={`absolute top-1 left-1 size-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : ''}`}
+      />
+    </button>
+  );
+}
+
+function PermissionsScreen({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [activeRole, setActiveRole] = useState<PermRole>('user');
+  const [activeSection, setActiveSection] = useState<'secciones' | 'acciones' | 'notificaciones' | 'limites'>('secciones');
+  const [draft, setDraft] = useState<RolePermissions>(DEFAULT_PERMISOS);
+  const [loaded, setLoaded] = useState(false);
+
+  const { data } = useQuery({
+    queryKey: ['config-permisos'],
+    queryFn: () => api.get<{ permisos: RolePermissions }>('/config/permisos'),
+    retry: 1,
+  });
+
+  useEffect(() => {
+    if (data?.permisos && !loaded) {
+      setDraft(data.permisos);
+      setLoaded(true);
+    }
+  }, [data, loaded]);
+
+  const save = useMutation({
+    mutationFn: (p: RolePermissions) => api.patch('/config/permisos', p as unknown as Record<string, unknown>),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['config-permisos'] });
+      toast.success('Permisos guardados');
+    },
+    onError: () => toast.error('Error al guardar'),
+  });
+
+  function setToggle(section: 'secciones' | 'acciones' | 'notificaciones', key: string, val: boolean) {
+    setDraft((prev) => {
+      return {
+        ...prev,
+        [activeRole]: {
+          ...prev[activeRole],
+          [section]: { ...prev[activeRole][section], [key]: val },
+        },
+      };
+    });
+  }
+
+  function setLimit(key: string, raw: string) {
+    const val = raw === '' ? null : parseInt(raw, 10);
+    setDraft((prev) => {
+      return {
+        ...prev,
+        [activeRole]: {
+          ...prev[activeRole],
+          limites: { ...prev[activeRole].limites, [key]: val },
+        },
+      };
+    });
+  }
+
+  const role = draft[activeRole];
+
+  const SECTION_ICONS = {
+    secciones: Layers,
+    acciones: Zap,
+    notificaciones: Bell,
+    limites: SlidersHorizontal,
+  };
+
+  const content = (
+    <motion.div
+      initial={{ opacity: 0, y: '100%' }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: '100%' }}
+      transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+      className="fixed inset-0 z-50 bg-[#0a0a0a] flex flex-col"
+      style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10 shrink-0">
+        <button onClick={onClose} className="size-8 grid place-items-center rounded-full hover:bg-white/10">
+          <X size={18} />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-base font-bold">Permisos por perfil</h1>
+          <p className="text-xs text-muted-foreground">Define qué puede ver y hacer cada tipo de usuario</p>
+        </div>
+        <button
+          onClick={() => save.mutate(draft)}
+          disabled={save.isPending}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 text-black text-sm font-semibold disabled:opacity-50"
+        >
+          <Save size={14} />
+          Guardar
+        </button>
+      </div>
+
+      {/* Role tabs */}
+      <div className="grid grid-cols-4 gap-1.5 px-4 pt-4 shrink-0">
+        {(['user', 'coach', 'menor', 'acudiente'] as PermRole[]).map((r) => (
+          <button
+            key={r}
+            onClick={() => setActiveRole(r)}
+            className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${
+              activeRole === r ? 'bg-white/15 text-white' : 'text-muted-foreground hover:bg-white/5'
+            }`}
+          >
+            {PERM_ROLE_LABELS[r]}
+          </button>
+        ))}
+      </div>
+
+      {/* Section tabs */}
+      <div className="flex gap-1 px-4 pt-3 pb-3 shrink-0">
+        {(['secciones', 'acciones', 'notificaciones', 'limites'] as const).map((s) => {
+          const Icon = SECTION_ICONS[s];
+          return (
+            <button
+              key={s}
+              onClick={() => setActiveSection(s)}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                activeSection === s ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'text-muted-foreground hover:bg-white/5'
+              }`}
+            >
+              <Icon size={12} />
+              {s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto px-4 pb-6">
+        {activeSection === 'limites' ? (
+          <div className="space-y-3 pt-2">
+            {LIMIT_LABELS.map(({ key, label, unit }) => (
+              <div key={key} className="flex items-center justify-between gap-3 bg-white/5 rounded-xl px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium">{label}</p>
+                  <p className="text-xs text-muted-foreground">{unit} · vacío = sin límite</p>
+                </div>
+                <input
+                  type="number"
+                  min={1}
+                  value={role.limites[key] ?? ''}
+                  onChange={(e) => setLimit(key, e.target.value)}
+                  placeholder="∞"
+                  className="w-20 h-9 rounded-lg bg-white/10 border border-white/10 text-center text-sm focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3 pt-2">
+            {(activeSection === 'secciones' ? SECTION_LABELS : activeSection === 'acciones' ? ACTION_LABELS : NOTIF_LABELS)
+              .filter(({ roles }) => !roles || roles.includes(activeRole))
+              .map(({ key, label }) => (
+              <div key={key} className="flex items-center justify-between gap-3 bg-white/5 rounded-xl px-4 py-3">
+                <p className="text-sm font-medium">{label}</p>
+                <Toggle
+                  checked={role[activeSection][key] ?? false}
+                  onChange={(v) => setToggle(activeSection, key, v)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+
+  return createPortal(content, document.body);
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────
 export function UsersAdmin() {
   const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('user');
   const [showCreate, setShowCreate] = useState(false);
+  const [showPermisos, setShowPermisos] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const users = useQuery({
@@ -87,23 +362,28 @@ export function UsersAdmin() {
 
   const filtered = allUsers.filter((u) => {
     if (activeTab === 'menor') return u.rol === 'user' && u.esMenor;
-    if (activeTab === 'acudiente') return false; // se carga desde endpoint separado (próximamente)
-    if (activeTab === 'user') return u.rol === 'user' && !u.esMenor;
+    if (activeTab === 'acudiente') return u.rol === 'user' && u.esAcudiente;
+    if (activeTab === 'user') return u.rol === 'user' && !u.esMenor && !u.esAcudiente;
     return u.rol === activeTab;
   });
 
   const counts = {
-    user: allUsers.filter((u) => u.rol === 'user' && !u.esMenor).length,
+    user: allUsers.filter((u) => u.rol === 'user' && !u.esMenor && !u.esAcudiente).length,
     coach: allUsers.filter((u) => u.rol === 'coach').length,
     menor: allUsers.filter((u) => u.esMenor).length,
-    acudiente: 0,
+    acudiente: allUsers.filter((u) => u.esAcudiente).length,
     super_admin: allUsers.filter((u) => u.rol === 'super_admin').length,
   };
 
   useEffect(() => {
     const handler = () => setShowCreate(true);
+    const handlerPermisos = () => setShowPermisos(true);
     window.addEventListener('fitvang:crear-usuario', handler);
-    return () => window.removeEventListener('fitvang:crear-usuario', handler);
+    window.addEventListener('fitvang:abrir-permisos', handlerPermisos);
+    return () => {
+      window.removeEventListener('fitvang:crear-usuario', handler);
+      window.removeEventListener('fitvang:abrir-permisos', handlerPermisos);
+    };
   }, []);
 
   return (
@@ -176,6 +456,9 @@ export function UsersAdmin() {
               else toast.success('Usuario creado');
             }}
           />
+        )}
+        {showPermisos && (
+          <PermissionsScreen onClose={() => setShowPermisos(false)} />
         )}
       </AnimatePresence>
     </div>

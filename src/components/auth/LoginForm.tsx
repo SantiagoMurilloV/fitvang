@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { api, ApiError } from '@/lib/api';
 
 interface LoginResp {
-  user: { id: string; nombre: string; rol: 'super_admin' | 'coach' | 'user'; email: string };
+  user: { id: string; nombre: string; rol: 'super_admin' | 'coach' | 'user'; email: string; esAcudiente?: boolean };
   redirect: string;
 }
 
@@ -50,7 +50,7 @@ function WelcomeScreen({ nombre }: { nombre: string }) {
 
 /* ─── Error banner ───────────────────────────────────────────────────── */
 const ERROR_MESSAGES: Record<number, string> = {
-  401: 'El email o la contraseña no coinciden. Revísalos e intenta de nuevo.',
+  401: 'El teléfono/email o la contraseña no coinciden.',
   429: 'Demasiados intentos seguidos. Espera un momento y vuelve a intentarlo.',
   0:   'Sin conexión. Revisa tu red e intenta de nuevo.',
 };
@@ -64,7 +64,7 @@ function errorMessage(err: unknown): string {
 
 /* ─── Main ───────────────────────────────────────────────────────────── */
 export default function LoginForm({ next }: { next?: string }) {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(''); // puede ser email o teléfono
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -77,14 +77,21 @@ export default function LoginForm({ next }: { next?: string }) {
     setLoading(true);
     try {
       const data = await api.post<LoginResp>('/auth/login', {
-        email: email.toLowerCase().trim(),
+        email: email.trim(),
         password,
       });
       const firstName = data.user.nombre.split(' ')[0];
       setWelcome(firstName);
-      // Redirect after bar animation finishes
+      const rol = data.user.rol;
+      const esAcudiente = data.user.esAcudiente;
+      const nextAllowed = next && (
+        rol === 'super_admin' ||
+        (rol === 'coach' && (next.startsWith('/coach') || next.startsWith('/admin'))) ||
+        (esAcudiente && next.startsWith('/acudiente')) ||
+        (rol === 'user' && !esAcudiente && next.startsWith('/app'))
+      );
       setTimeout(() => {
-        window.location.href = next || data.redirect;
+        window.location.href = nextAllowed ? next! : data.redirect;
       }, 1500);
     } catch (err) {
       setError(errorMessage(err));
@@ -139,16 +146,17 @@ export default function LoginForm({ next }: { next?: string }) {
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-              Email
+              Teléfono o Email
             </label>
             <input
-              type="email"
+              type="text"
+              inputMode="tel"
               required
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(''); }}
-              autoComplete="email"
+              autoComplete="username"
               className="w-full h-12 px-4 rounded-xl bg-card border border-border focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition text-sm"
-              placeholder="tu@email.com"
+              placeholder="3001234567"
             />
           </div>
           <div>

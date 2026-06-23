@@ -5,14 +5,30 @@ import LoginForm from '@/components/auth/LoginForm';
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000';
 const next = Astro.url.searchParams.get('next') ?? undefined;
 
+function roleTarget(user: { rol: string; esAcudiente?: boolean }) {
+  if (user.rol === 'super_admin') return '/admin';
+  if (user.rol === 'coach') return '/coach';
+  if (user.esAcudiente) return '/acudiente';
+  return '/app';
+}
+
+function nextIsAllowed(next: string | undefined, user: { rol: string; esAcudiente?: boolean }): boolean {
+  if (!next) return false;
+  if (user.rol === 'super_admin') return true;
+  if (user.rol === 'coach') return next.startsWith('/coach') || next.startsWith('/admin');
+  if (user.esAcudiente) return next.startsWith('/acudiente');
+  return next.startsWith('/app');
+}
+
 try {
   const res = await fetch(`${API_URL}/api/auth/me`, {
     headers: { cookie: Astro.request.headers.get('cookie') ?? '' },
   });
   if (res.ok) {
-    const { user } = await res.json() as { user: { rol: string } };
-    const target = user.rol === 'super_admin' ? '/admin' : user.rol === 'coach' ? '/coach' : '/app';
-    return Astro.redirect(next ?? target);
+    const { user } = await res.json() as { user: { rol: string; esAcudiente?: boolean } };
+    const target = roleTarget(user);
+    const dest = nextIsAllowed(next, user) ? next! : target;
+    return Astro.redirect(dest);
   }
 } catch {
   // no session — show login

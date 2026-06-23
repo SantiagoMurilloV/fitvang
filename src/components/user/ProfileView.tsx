@@ -42,9 +42,27 @@ const GENERO_LABEL: Record<string, string> = {
   prefiero_no_decir: 'Prefiero no decir',
 };
 
-function AvatarBlock({ profile, onAvatarChange }: { profile: UserProfile; onAvatarChange: (url: string) => void }) {
+function AvatarBlock({ profile, onAvatarChange, onNameSave }: {
+  profile: UserProfile;
+  onAvatarChange: (url: string) => void;
+  onNameSave: (name: string) => Promise<void>;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(profile.nombre);
+  const [savingName, setSavingName] = useState(false);
+
+  async function saveName() {
+    if (!nameDraft.trim() || nameDraft === profile.nombre) { setEditingName(false); return; }
+    setSavingName(true);
+    try {
+      await onNameSave(nameDraft.trim());
+      setEditingName(false);
+    } finally {
+      setSavingName(false);
+    }
+  }
 
   const initials = profile.nombre.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
@@ -119,8 +137,37 @@ function AvatarBlock({ profile, onAvatarChange }: { profile: UserProfile; onAvat
           onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
       </div>
       <div className="text-center">
-        <p className="font-bold text-lg">{profile.nombre}</p>
-        <p className="text-sm text-muted-foreground">{profile.email}</p>
+        {editingName ? (
+          <div className="flex items-center gap-2 justify-center">
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameDraft(profile.nombre); setEditingName(false); } }}
+              maxLength={120}
+              className="h-9 px-3 rounded-xl bg-background border border-primary text-sm text-center outline-none w-48"
+            />
+            <button
+              onClick={saveName}
+              disabled={savingName}
+              className="size-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 disabled:opacity-50 shrink-0"
+            >
+              {savingName ? <span className="size-3 rounded-full border-2 border-current border-t-transparent animate-spin" /> : <Check size={14} />}
+            </button>
+            <button onClick={() => { setNameDraft(profile.nombre); setEditingName(false); }} className="size-8 rounded-xl border border-border flex items-center justify-center hover:border-destructive hover:text-destructive shrink-0">
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => { setNameDraft(profile.nombre); setEditingName(true); }}
+            className="flex items-center gap-1.5 justify-center"
+          >
+            <span className="font-bold text-lg">{profile.nombre}</span>
+            <Edit2 size={13} className="text-primary/60" />
+          </button>
+        )}
+        <p className="text-sm text-muted-foreground mt-0.5">{profile.email}</p>
       </div>
     </div>
   );
@@ -279,6 +326,10 @@ export function ProfileView() {
               qc.setQueryData(['my-profile'], (old: any) =>
                 old ? { user: { ...old.user, avatarUrl: url } } : old
               );
+            }}
+            onNameSave={async (nombre) => {
+              await patch.mutateAsync({ nombreCompleto: nombre });
+              toast.success('Nombre actualizado ✓');
             }}
           />
           {memberSince && (

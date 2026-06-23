@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Plus, X, Check, Trash2, Clock, Users, CalendarDays, RefreshCw, Pencil } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth-store';
 import { Button } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
 
@@ -568,6 +569,7 @@ function TemplateList({ templates, trainingTypes, onDelete, onEdit }: {
 /* ─── Main ───────────────────────────────────────────────────────────── */
 export function SchedulerAdmin() {
   const qc = useQueryClient();
+  const user = useAuth((s) => s.user);
   const [draft, setDraft] = useState<Draft>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
@@ -588,9 +590,10 @@ export function SchedulerAdmin() {
     queryFn: () => api.get<{ planTypes: PlanType[] }>('/plans/types'),
   });
 
+  // Filtra por coachId=me para mostrar solo las clases del usuario logueado
   const { data: templatesData, refetch } = useQuery({
-    queryKey: ['class-templates'],
-    queryFn: () => api.get<{ templates: Template[] }>('/classes/templates'),
+    queryKey: ['class-templates', user?.id],
+    queryFn: () => api.get<{ templates: Template[] }>('/classes/templates?coachId=me'),
   });
 
   const deleteTemplateMutation = useMutation({
