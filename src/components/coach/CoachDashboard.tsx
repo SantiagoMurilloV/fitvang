@@ -457,8 +457,8 @@ function CoachProfileTab() {
       refetch();
       qc.invalidateQueries({ queryKey: ['coach-me-profile'] });
       toast.success('Foto actualizada ✓');
-    } catch {
-      toast.error('No se pudo subir la foto.');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'No se pudo subir la foto.');
     } finally {
       setUploading(false);
     }

@@ -56,8 +56,8 @@ function AvatarBlock({ profile, onAvatarChange }: { profile: UserProfile; onAvat
       await api.patch('/users/me', { avatarUrl: url });
       onAvatarChange(url);
       toast.success('Foto actualizada ✓');
-    } catch {
-      toast.error('No se pudo subir la foto.');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'No se pudo subir la foto.');
     } finally {
       setUploading(false);
     }

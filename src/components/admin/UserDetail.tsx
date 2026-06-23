@@ -190,8 +190,8 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
       refetch();
       qc.invalidateQueries({ queryKey: ['admin-users'] });
       toast.success('Foto actualizada');
-    } catch {
-      toast.error('No se pudo subir la foto');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'No se pudo subir la foto');
     } finally {
       setUploadingAvatar(false);
     }

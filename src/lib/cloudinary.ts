@@ -11,8 +11,9 @@ export async function uploadAvatar(file: File): Promise<string> {
   });
   const data = await res.json();
   if (!res.ok) {
-    console.error('[cloudinary] upload error:', data);
-    throw new Error(data?.error?.message ?? 'Upload failed');
+    const msg = data?.error?.message ?? JSON.stringify(data);
+    console.error('[cloudinary] upload error:', msg);
+    throw new Error(msg);
   }
   return data.secure_url.replace('/upload/', '/upload/c_fill,g_face,w_200,h_200,f_webp,q_auto/');
 }
