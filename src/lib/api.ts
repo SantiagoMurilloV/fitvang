@@ -24,6 +24,25 @@ function apiBase(): string {
   return (import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000') + '/api';
 }
 
+async function requestForm<T>(path: string, form: FormData, _retry = false): Promise<T> {
+  const res = await fetch(`${apiBase()}${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    body: form,
+  });
+  const text = await res.text();
+  let data: any = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (!res.ok) {
+    if (res.status === 401 && !_retry) {
+      const r = await fetch(`${apiBase()}/auth/refresh`, { method: 'POST', credentials: 'include' });
+      if (r.ok) return requestForm<T>(path, form, true);
+    }
+    throw new ApiError(res.status, data?.error ?? res.statusText, data);
+  }
+  return data as T;
+}
+
 async function request<T>(method: string, path: string, body?: Json, _retry = false): Promise<T> {
   const res = await fetch(`${apiBase()}${path}`, {
     method,
@@ -51,6 +70,7 @@ async function request<T>(method: string, path: string, body?: Json, _retry = fa
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: Json) => request<T>('POST', path, body),
+  postForm: <T>(path: string, form: FormData) => requestForm<T>(path, form),
   patch: <T>(path: string, body?: Json) => request<T>('PATCH', path, body),
   put: <T>(path: string, body?: Json) => request<T>('PUT', path, body),
   delete: <T>(path: string) => request<T>('DELETE', path),
