@@ -239,17 +239,17 @@ function SessionCell({ session, onViewAttendees, onEdit, onDelete }: {
         </div>
       </button>
 
-      {/* Botones de acción — visibles solo al hacer hover */}
-      <div className="absolute top-0.5 right-0.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Botones de acción — siempre visibles */}
+      <div className="absolute top-0.5 right-0.5 flex gap-0.5">
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          className="size-5 rounded flex items-center justify-center bg-background/80 text-blue-400 hover:bg-blue-500/20 transition-colors"
+          className="size-5 rounded flex items-center justify-center bg-background/80 text-blue-400 active:bg-blue-500/20 transition-colors"
         >
           <Pencil size={9} />
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="size-5 rounded flex items-center justify-center bg-background/80 text-red-400 hover:bg-red-500/20 transition-colors"
+          className="size-5 rounded flex items-center justify-center bg-background/80 text-red-400 active:bg-red-500/20 transition-colors"
         >
           <Trash2 size={9} />
         </button>

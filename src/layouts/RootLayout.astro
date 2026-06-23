@@ -30,12 +30,23 @@ const { title = "Fitvang" } = Astro.props;
     <meta name="description" content="Club de entrenamiento funcional y fútbol funcional — Cali" />
     <title>{title}</title>
   </head>
-  <body class="min-h-screen bg-background text-foreground" style="opacity:0;transition:opacity 0.25s ease;">
+  <body class="min-h-screen bg-background text-foreground" style="opacity:0;transition:opacity 0.12s ease;">
+
+    <!-- PWA splash — visible solo mientras carga, oculto en cuanto el body aparece -->
+    <div id="pwa-splash" style="position:fixed;inset:0;z-index:99999;background:#0D0D0D;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity 0.2s ease;">
+      <img src="/icons/icon-192.png" alt="Fitvang" style="width:72px;height:72px;border-radius:20px;box-shadow:0 0 32px rgba(61,196,219,0.3);" />
+      <div style="width:120px;height:3px;background:rgba(255,255,255,0.08);border-radius:9px;overflow:hidden;">
+        <div id="splash-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#3DC4DB,#4DD4E8);border-radius:9px;transition:width 0.6s cubic-bezier(.4,0,.2,1);"></div>
+      </div>
+    </div>
+
     <!-- Page transition bar -->
     <div id="page-loader" style="position:fixed;top:0;left:0;right:0;z-index:9999;height:2px;pointer-events:none;">
-      <div id="page-loader-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#3DC4DB,#4DD4E8);border-radius:0 2px 2px 0;box-shadow:0 0 10px rgba(61,196,219,0.7);opacity:0;transition:opacity 0.2s ease;"></div>
+      <div id="page-loader-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#3DC4DB,#4DD4E8);border-radius:0 2px 2px 0;box-shadow:0 0 8px rgba(61,196,219,0.6);opacity:0;transition:opacity 0.15s ease;"></div>
     </div>
+
     <slot />
+
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -44,15 +55,31 @@ const { title = "Fitvang" } = Astro.props;
       }
 
       (function () {
-        const body = document.body;
-        const bar  = document.getElementById('page-loader-bar') as HTMLElement;
+        const body    = document.body;
+        const bar     = document.getElementById('page-loader-bar') as HTMLElement;
+        const splash  = document.getElementById('pwa-splash') as HTMLElement;
+        const splashB = document.getElementById('splash-bar') as HTMLElement;
+
+        // ── PWA Splash: animar barra y ocultar antes del fade-in ────────
+        const isPwa = window.matchMedia('(display-mode: standalone)').matches
+          || (window.navigator as any).standalone === true;
+
+        if (isPwa && splash) {
+          // Animación de carga: 0→70% rápido, luego ocultar con el fade-in
+          splashB.style.width = '70%';
+          setTimeout(() => { splashB.style.width = '100%'; }, 400);
+          setTimeout(() => {
+            splash.style.opacity = '0';
+            setTimeout(() => { splash.style.display = 'none'; }, 220);
+          }, 700);
+        } else if (splash) {
+          splash.style.display = 'none';
+        }
 
         // ── Fade in on arrival ──────────────────────────────────────────
-        function fadeIn() {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
           body.style.opacity = '1';
-        }
-        // requestAnimationFrame ensures paint happens before transition
-        requestAnimationFrame(() => requestAnimationFrame(fadeIn));
+        }));
 
         // ── Progress bar ────────────────────────────────────────────────
         let raf: number | null = null;
@@ -63,9 +90,8 @@ const { title = "Fitvang" } = Astro.props;
           prog = 0;
           bar.style.transition = 'none';
           bar.style.width = '0%';
-
           function tick() {
-            prog += (78 - prog) * 0.06;
+            prog += (80 - prog) * 0.08;
             bar.style.width = prog + '%';
             raf = requestAnimationFrame(tick);
           }
@@ -74,19 +100,18 @@ const { title = "Fitvang" } = Astro.props;
 
         function finishBar() {
           if (raf) cancelAnimationFrame(raf);
-          bar.style.transition = 'width 0.15s ease';
+          bar.style.transition = 'width 0.12s ease';
           bar.style.width = '100%';
-          setTimeout(() => { bar.style.opacity = '0'; bar.style.width = '0%'; }, 220);
+          setTimeout(() => { bar.style.opacity = '0'; bar.style.width = '0%'; }, 180);
         }
 
         // ── Fade-out + bar on navigation ────────────────────────────────
         function onNavigate() {
-          body.style.transition = 'opacity 0.18s ease';
+          body.style.transition = 'opacity 0.1s ease';
           body.style.opacity = '0';
           startBar();
         }
 
-        // Link clicks
         document.addEventListener('click', (e) => {
           const a = (e.target as Element)?.closest('a');
           if (!a) return;
@@ -96,10 +121,8 @@ const { title = "Fitvang" } = Astro.props;
           onNavigate();
         });
 
-        // Programmatic navigations (location.href = ..., replace, etc.)
         window.addEventListener('beforeunload', onNavigate);
 
-        // Clean up bar if user presses back/forward
         window.addEventListener('pageshow', (e) => {
           if (e.persisted) { body.style.opacity = '1'; finishBar(); }
         });
