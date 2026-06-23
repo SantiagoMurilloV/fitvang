@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
   ChevronLeft, Check, ToggleLeft, ToggleRight,
   User, Mail, Phone, CreditCard, Calendar, Weight, Ruler,
-  Shield, Tag, Eye, EyeOff, Camera, Loader2,
+  Shield, Tag, Eye, EyeOff, Camera, Loader2, Trash2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/shared/Button';
@@ -214,6 +214,32 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
     }
   }
 
+  async function handleRemoveAvatar() {
+    const result = await Swal.fire({
+      title: 'Eliminar foto',
+      text: '¿Quitar la foto de perfil de este usuario?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, quitar',
+      cancelButtonText: 'Cancelar',
+      background: '#0f0f11',
+      color: '#f8f8f8',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#2a2a2f',
+      customClass: { popup: 'rounded-2xl border border-white/10', confirmButton: 'rounded-xl font-semibold', cancelButton: 'rounded-xl font-semibold' },
+      reverseButtons: true,
+    });
+    if (!result.isConfirmed) return;
+    try {
+      await api.patch(`/users/${userId}`, { avatarUrl: '' });
+      refetch();
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+      toast.success('Foto eliminada');
+    } catch {
+      toast.error('No se pudo eliminar la foto');
+    }
+  }
+
   const { data: scoringData } = useQuery({
     queryKey: ['user-scoring', userId],
     queryFn: () => api.get<ScoringData>(`/stats/${userId}/scoring`),
@@ -306,22 +332,33 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
 
             {/* Avatar + stats */}
             <div className="flex items-center gap-4 py-2">
-              <label className="relative size-16 rounded-full shrink-0 cursor-pointer group">
-                {u.avatarUrl ? (
-                  <img src={u.avatarUrl} alt={u.nombre} className="size-16 rounded-full object-cover" />
-                ) : (
-                  <div className="size-16 rounded-full bg-primary/20 grid place-items-center text-xl font-bold text-primary">
-                    {initials}
+              <div className="relative shrink-0">
+                <label className="relative size-16 rounded-full cursor-pointer group block">
+                  {u.avatarUrl ? (
+                    <img src={u.avatarUrl} alt={u.nombre} className="size-16 rounded-full object-cover" />
+                  ) : (
+                    <div className="size-16 rounded-full bg-primary/20 grid place-items-center text-xl font-bold text-primary">
+                      {initials}
+                    </div>
+                  )}
+                  <div className={`absolute inset-0 rounded-full bg-black/50 flex items-center justify-center transition-opacity ${uploadingAvatar ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                    {uploadingAvatar
+                      ? <Loader2 size={18} className="text-white animate-spin" />
+                      : <Camera size={18} className="text-white" />
+                    }
                   </div>
+                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} disabled={uploadingAvatar} />
+                </label>
+                {u.avatarUrl && (
+                  <button
+                    onClick={handleRemoveAvatar}
+                    className="absolute -bottom-1 -right-1 size-5 rounded-full bg-red-500 flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors"
+                    title="Eliminar foto"
+                  >
+                    <Trash2 size={10} className="text-white" />
+                  </button>
                 )}
-                <div className={`absolute inset-0 rounded-full bg-black/50 flex items-center justify-center transition-opacity ${uploadingAvatar ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                  {uploadingAvatar
-                    ? <Loader2 size={18} className="text-white animate-spin" />
-                    : <Camera size={18} className="text-white" />
-                  }
-                </div>
-                <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} disabled={uploadingAvatar} />
-              </label>
+              </div>
               <div>
                 <p className="font-bold text-lg leading-tight">{u.nombre}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
