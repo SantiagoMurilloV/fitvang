@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Search, ChevronRight, Shield, Users2, Baby, UserCheck, X, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Search, ChevronRight, Shield, Users2, Baby, UserCheck, X, ToggleLeft, ToggleRight, HeartHandshake } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
@@ -49,9 +49,10 @@ interface ProfileUser {
 
 // ── Tabs de tipo de usuario ───────────────────────────────────────────────
 const USER_TABS = [
-  { key: 'user', label: 'Estudiantes', icon: Users2, color: 'text-blue-400' },
+  { key: 'user', label: 'Clientes', icon: Users2, color: 'text-blue-400' },
   { key: 'coach', label: 'Entrenadores', icon: UserCheck, color: 'text-green-400' },
   { key: 'menor', label: 'Menores', icon: Baby, color: 'text-amber-400' },
+  { key: 'acudiente', label: 'Acudientes', icon: HeartHandshake, color: 'text-pink-400' },
   { key: 'super_admin', label: 'Admin', icon: Shield, color: 'text-purple-400' },
 ] as const;
 
@@ -183,7 +184,7 @@ function UserRow({ u, onSelect, plans, onRefetch }: { u: UserRow; onSelect: () =
   const ROL_LABEL: Record<Role, string> = {
     super_admin: 'Admin',
     coach: 'Coach',
-    user: u.esMenor ? 'Menor' : 'Estudiante',
+    user: u.esMenor ? 'Menor' : 'Cliente',
   };
 
   return (
@@ -242,43 +243,46 @@ export function UsersAdmin() {
     queryFn: () => api.get<{ planTypes: PlanType[] }>('/plans/types'),
   });
 
-  const filtered = (users.data?.users ?? []).filter((u) => {
+  const allUsers = users.data?.users ?? [];
+
+  const filtered = allUsers.filter((u) => {
     if (activeTab === 'menor') return u.rol === 'user' && u.esMenor;
+    if (activeTab === 'acudiente') return false; // se carga desde endpoint separado (próximamente)
     if (activeTab === 'user') return u.rol === 'user' && !u.esMenor;
     return u.rol === activeTab;
   });
 
   const counts = {
-    user: (users.data?.users ?? []).filter((u) => u.rol === 'user' && !u.esMenor).length,
-    coach: (users.data?.users ?? []).filter((u) => u.rol === 'coach').length,
-    menor: (users.data?.users ?? []).filter((u) => u.esMenor).length,
-    super_admin: (users.data?.users ?? []).filter((u) => u.rol === 'super_admin').length,
+    user: allUsers.filter((u) => u.rol === 'user' && !u.esMenor).length,
+    coach: allUsers.filter((u) => u.rol === 'coach').length,
+    menor: allUsers.filter((u) => u.esMenor).length,
+    acudiente: 0,
+    super_admin: allUsers.filter((u) => u.rol === 'super_admin').length,
   };
+
+  useEffect(() => {
+    const handler = () => setShowCreate(true);
+    window.addEventListener('fitvang:crear-usuario', handler);
+    return () => window.removeEventListener('fitvang:crear-usuario', handler);
+  }, []);
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Usuarios</h1>
-        <Button size="sm" onClick={() => setShowCreate(true)}>
-          <Plus className="size-4" /> Nuevo
-        </Button>
-      </div>
-
       {/* Tabs por tipo */}
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-5 gap-1.5">
         {USER_TABS.map(({ key, label, icon: Icon, color }) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className={`flex flex-col items-center gap-1 py-2 px-1 rounded-xl border text-center transition-all ${
+            className={`flex flex-col items-center gap-1 py-2 px-1 rounded-xl border text-center transition-all w-full ${
               activeTab === key
                 ? 'bg-card border-primary/50 text-foreground'
                 : 'border-border text-muted-foreground hover:border-border/80'
             }`}
           >
-            <Icon size={16} className={activeTab === key ? color : ''} />
-            <span className="text-[10px] font-medium leading-tight">{label}</span>
-            <span className="text-[10px] font-bold">{counts[key]}</span>
+            <Icon size={15} className={activeTab === key ? color : ''} />
+            <span className="text-[9px] font-medium leading-tight">{label}</span>
+            <span className="text-[9px] font-bold">{counts[key]}</span>
           </button>
         ))}
       </div>
@@ -302,7 +306,7 @@ export function UsersAdmin() {
           ))
         ) : filtered.length === 0 ? (
           <div className="text-center py-10 text-sm text-muted-foreground">
-            No hay {USER_TABS.find((t) => t.key === activeTab)?.label.toLowerCase()} registrados.
+            No hay {USER_TABS.find((t) => t.key === activeTab)?.label.toLowerCase()} registrados aún.
           </div>
         ) : (
           filtered.map((u) => (
@@ -344,17 +348,23 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     email: '',
     telefono: '',
     fechaNacimiento: '',
-    rol: 'user' as 'user' | 'coach',
+    tipo: 'user' as 'user' | 'coach' | 'acudiente',
     esMenor: false,
     acudienteId: '',
   });
 
   const create = useMutation({
     mutationFn: () => {
-      const payload: Record<string, unknown> = { ...form };
-      if (!payload.acudienteId) delete payload.acudienteId;
-      if (!payload.telefono) delete payload.telefono;
-      if (!payload.fechaNacimiento) delete payload.fechaNacimiento;
+      const payload: Record<string, unknown> = {
+        nombreCompleto: form.nombreCompleto,
+        documento: form.documento,
+        email: form.email,
+        rol: form.tipo === 'acudiente' ? 'user' : form.tipo,
+        esMenor: form.esMenor,
+      };
+      if (form.telefono) payload.telefono = form.telefono;
+      if (form.fechaNacimiento) payload.fechaNacimiento = form.fechaNacimiento;
+      if (form.esMenor && form.acudienteId) payload.acudienteId = form.acudienteId;
       return api.post<{ user: { id: string }; passwordTemporal?: string }>('/users', payload);
     },
     onSuccess: (d) => onSuccess(d.passwordTemporal),
@@ -390,18 +400,21 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void; onSucces
         <div>
           <label className="text-xs text-muted-foreground">Tipo de usuario</label>
           <select
-            value={form.rol}
-            onChange={(e) => setForm({ ...form, rol: e.target.value as 'user' | 'coach' })}
+            value={form.tipo}
+            onChange={(e) => setForm({ ...form, tipo: e.target.value as 'user' | 'coach' | 'acudiente', esMenor: false })}
             className="mt-1 w-full h-11 px-4 rounded-xl bg-background border border-border focus:border-primary focus:outline-none text-sm"
           >
-            <option value="user">Estudiante</option>
+            <option value="user">Cliente</option>
             <option value="coach">Entrenador</option>
+            <option value="acudiente">Acudiente</option>
           </select>
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={form.esMenor} onChange={(e) => setForm({ ...form, esMenor: e.target.checked })} />
-          Es menor de edad
-        </label>
+        {form.tipo === 'user' && (
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.esMenor} onChange={(e) => setForm({ ...form, esMenor: e.target.checked })} />
+            Es menor de edad
+          </label>
+        )}
         {form.esMenor && (
           <div>
             <label className="text-xs text-muted-foreground">ID del acudiente (UUID)</label>

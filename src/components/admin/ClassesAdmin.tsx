@@ -1,10 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Zap, X, Users2, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { X, Users2, ChevronLeft, ChevronRight, Clock, Pencil, Trash2 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import { api } from '@/lib/api';
 import { Card } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
@@ -131,30 +132,129 @@ function CancelModal({ session, onClose }: { session: Session; onClose: () => vo
   );
 }
 
-/* ─── Session Cell ───────────────────────────────────────────────────── */
-function SessionCell({ session, onClick }: { session: Session; onClick: () => void }) {
-  const pct = session.capacidadMax > 0 ? (session.ocupados / session.capacidadMax) : 0;
-  const isFull = session.ocupados >= session.capacidadMax;
+/* ─── Edit Session Modal ─────────────────────────────────────────────── */
+function EditSessionModal({ session, onClose }: { session: Session; onClose: () => void }) {
+  const [horaInicio, setHoraInicio] = useState(session.horaInicio.slice(0, 5));
+  const [capacidadMax, setCapacidadMax] = useState(String(session.capacidadMax || ''));
+  const qc = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: () => api.patch(`/classes/sessions/${session.id}`, {
+      horaInicio: horaInicio.slice(0, 5),
+      capacidadMax: capacidadMax ? Number(capacidadMax) : null,
+    }),
+    onSuccess: () => {
+      toast.success('Sesión actualizada.');
+      qc.invalidateQueries({ queryKey: ['sessions-week'] });
+      onClose();
+    },
+    onError: () => toast.error('No se pudo actualizar la sesión.'),
+  });
 
   return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left rounded-lg p-1.5 border transition-all hover:scale-[1.02] active:scale-[0.98] ${
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+        <Card>
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <p className="font-semibold">Editar horario</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{session.nombre} · afecta todas las sesiones futuras de este horario</p>
+            </div>
+            <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground uppercase tracking-wider">Hora inicio</label>
+              <input
+                type="time"
+                value={horaInicio}
+                onChange={(e) => setHoraInicio(e.target.value)}
+                className="mt-1 w-full h-10 px-3 rounded-xl bg-background border border-border focus:border-primary focus:outline-none text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground uppercase tracking-wider">Capacidad máx <span className="normal-case text-muted-foreground/50">(opcional)</span></label>
+              <input
+                type="number"
+                value={capacidadMax}
+                min={1}
+                max={500}
+                onChange={(e) => setCapacidadMax(e.target.value)}
+                placeholder="Sin límite"
+                className="mt-1 w-full h-10 px-3 rounded-xl bg-background border border-border focus:border-primary focus:outline-none text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <Button variant="ghost" size="sm" onClick={onClose} className="flex-1">Cancelar</Button>
+            <Button size="sm" loading={mutation.isPending} onClick={() => mutation.mutate()} className="flex-1">Guardar</Button>
+          </div>
+        </Card>
+      </motion.div>
+    </div>
+  );
+}
+
+/* ─── Delete Session confirm ─────────────────────────────────────────── */
+function useDeleteSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/classes/sessions/${id}`),
+    onSuccess: () => {
+      toast.success('Sesión eliminada.');
+      qc.invalidateQueries({ queryKey: ['sessions-week'] });
+    },
+    onError: () => toast.error('No se pudo eliminar la sesión.'),
+  });
+}
+
+/* ─── Session Cell ───────────────────────────────────────────────────── */
+function SessionCell({ session, onViewAttendees, onEdit, onDelete }: {
+  session: Session;
+  onViewAttendees: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const pct = session.capacidadMax > 0 ? (session.ocupados / session.capacidadMax) : 0;
+  const isFull = session.ocupados >= session.capacidadMax && session.capacidadMax > 0;
+
+  return (
+    <div
+      className={`group relative w-full text-left rounded-lg p-1.5 border transition-all ${
         session.estado === 'cancelada'
           ? 'border-red-500/30 bg-red-500/10 opacity-60'
           : 'border-white/10 bg-white/5 hover:border-white/20'
       }`}
       style={{ borderLeftColor: session.trainingColor || '#3DC4DB', borderLeftWidth: 3 }}
     >
-      <p className="text-[10px] font-semibold truncate leading-tight">{session.nombre}</p>
-      <p className="text-[9px] text-muted-foreground">{session.horaInicio}</p>
-      <div className="flex items-center gap-1 mt-0.5">
-        <div className="flex-1 h-0.5 bg-white/10 rounded-full overflow-hidden">
-          <div className="h-full rounded-full" style={{ width: `${pct * 100}%`, backgroundColor: isFull ? '#ef4444' : (session.trainingColor || '#3DC4DB') }} />
+      {/* Contenido clickeable para ver reservados */}
+      <button className="w-full text-left" onClick={onViewAttendees}>
+        <p className="text-[10px] font-semibold truncate leading-tight pr-8">{session.nombre}</p>
+        <p className="text-[9px] text-muted-foreground">{session.horaInicio.slice(0, 5)}</p>
+        <div className="flex items-center gap-1 mt-0.5">
+          <div className="flex-1 h-0.5 bg-white/10 rounded-full overflow-hidden">
+            <div className="h-full rounded-full" style={{ width: `${pct * 100}%`, backgroundColor: isFull ? '#ef4444' : (session.trainingColor || '#3DC4DB') }} />
+          </div>
+          <span className="text-[8px] text-muted-foreground">{session.ocupados}</span>
         </div>
-        <span className="text-[8px] text-muted-foreground">{session.ocupados}</span>
+      </button>
+
+      {/* Botones de acción — visibles solo al hacer hover */}
+      <div className="absolute top-0.5 right-0.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          className="size-5 rounded flex items-center justify-center bg-background/80 text-blue-400 hover:bg-blue-500/20 transition-colors"
+        >
+          <Pencil size={9} />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="size-5 rounded flex items-center justify-center bg-background/80 text-red-400 hover:bg-red-500/20 transition-colors"
+        >
+          <Trash2 size={9} />
+        </button>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -164,6 +264,8 @@ function WeeklyCalendar() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [cancelTarget, setCancelTarget] = useState<Session | null>(null);
   const [attendeesTarget, setAttendeesTarget] = useState<Session | null>(null);
+  const [editTarget, setEditTarget] = useState<Session | null>(null);
+  const deleteSession = useDeleteSession();
 
   const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
   const weekEnd = addDays(weekStart, 6);
@@ -194,6 +296,25 @@ function WeeklyCalendar() {
   // Horas únicas para el eje Y
   const allHours = [...new Set((data?.sessions ?? []).map((s) => s.horaInicio.slice(0, 2)))].sort();
 
+  async function handleDelete(session: Session) {
+    const fecha = format(new Date(session.fecha + 'T12:00:00'), "d 'de' MMMM", { locale: es });
+    const result = await Swal.fire({
+      title: 'Eliminar sesión',
+      html: `<span style="color:#a1a1aa">¿Eliminar <b style="color:#f8f8f8">${session.nombre}</b> del ${fecha}?</span>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      background: '#0f0f11',
+      color: '#f8f8f8',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#2a2a2f',
+      customClass: { popup: 'rounded-2xl border border-white/10' },
+      reverseButtons: true,
+    });
+    if (result.isConfirmed) deleteSession.mutate(session.id);
+  }
+
   return (
     <div className="space-y-4">
       {/* Controles semana */}
@@ -212,19 +333,17 @@ function WeeklyCalendar() {
             <button onClick={() => setWeekOffset(0)} className="text-xs text-primary hover:underline">Hoy</button>
           )}
         </div>
-        <Button size="sm" loading={generate.isPending} onClick={() => generate.mutate()} className="gap-1.5">
-          <Zap size={12} /> Generar 30d
-        </Button>
       </div>
 
       {/* Grilla semanal */}
       {isLoading ? (
         <div className="h-64 rounded-2xl bg-card animate-pulse" />
       ) : (
-        <div className="overflow-x-auto -mx-4 px-4">
-          <div className="min-w-[560px]">
+        <div className="overflow-x-auto -mx-4 px-0 rounded-2xl border border-border bg-card">
+          {/* min-w: 48px hora + 7 cols × 130px = 958px */}
+          <div className="p-3" style={{ minWidth: '960px' }}>
             {/* Cabecera días */}
-            <div className="grid grid-cols-8 gap-0.5 mb-1">
+            <div className="grid gap-1 mb-2" style={{ gridTemplateColumns: '48px repeat(7, minmax(128px, 1fr))' }}>
               <div className="flex items-center justify-center">
                 <Clock size={12} className="text-muted-foreground" />
               </div>
@@ -232,17 +351,20 @@ function WeeklyCalendar() {
                 const date = addDays(weekStart, i);
                 const isToday = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
                 return (
-                  <div key={dia} className={`text-center py-1 rounded-lg ${isToday ? 'bg-primary/15' : ''}`}>
-                    <p className={`text-[10px] font-semibold ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+                  <div key={dia} className={`text-center py-2.5 rounded-xl border ${isToday ? 'bg-primary/15 border-primary/30' : 'border-white/5 bg-white/2'}`}>
+                    <p className={`text-[11px] font-semibold tracking-wide uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
                       {DIAS_SHORT[dia]}
                     </p>
-                    <p className={`text-xs font-bold ${isToday ? 'text-primary' : ''}`}>
+                    <p className={`text-base font-bold mt-0.5 ${isToday ? 'text-primary' : ''}`}>
                       {format(date, 'd')}
                     </p>
                   </div>
                 );
               })}
             </div>
+
+            {/* Separador */}
+            <div className="h-px bg-border mb-2" />
 
             {/* Filas de horas */}
             {allHours.length === 0 ? (
@@ -253,21 +375,21 @@ function WeeklyCalendar() {
               </div>
             ) : (
               allHours.map((hour) => (
-                <div key={hour} className="grid grid-cols-8 gap-0.5 mb-0.5 min-h-[52px]">
-                  <div className="flex items-start justify-end pr-2 pt-1">
-                    <span className="text-[10px] text-muted-foreground">{hour}:00</span>
+                <div key={hour} className="grid gap-1 mb-1 min-h-[68px]" style={{ gridTemplateColumns: '48px repeat(7, minmax(128px, 1fr))' }}>
+                  <div className="flex items-start justify-end pr-2 pt-2">
+                    <span className="text-[10px] text-muted-foreground font-mono">{hour}:00</span>
                   </div>
                   {DIAS_ORDER.map((dia) => {
                     const sessions = byDay[dia].filter((s) => s.horaInicio.startsWith(hour));
                     return (
-                      <div key={dia} className="space-y-0.5 min-h-[48px]">
+                      <div key={dia} className="space-y-1 min-h-[64px] bg-white/2 rounded-lg p-1">
                         {sessions.map((s) => (
                           <SessionCell
                             key={s.id}
                             session={s}
-                            onClick={() => {
-                              if (s.estado === 'programada') setAttendeesTarget(s);
-                            }}
+                            onViewAttendees={() => { if (s.estado === 'programada') setAttendeesTarget(s); }}
+                            onEdit={() => setEditTarget(s)}
+                            onDelete={() => handleDelete(s)}
                           />
                         ))}
                       </div>
@@ -280,16 +402,10 @@ function WeeklyCalendar() {
         </div>
       )}
 
-      {/* Leyenda */}
-      {(data?.sessions ?? []).length > 0 && (
-        <p className="text-[10px] text-muted-foreground text-center">
-          Toca una clase para ver los reservados · Arrastra para reorganizar (próximamente)
-        </p>
-      )}
-
       <AnimatePresence>
         {cancelTarget && <CancelModal session={cancelTarget} onClose={() => setCancelTarget(null)} />}
         {attendeesTarget && <AttendeesSheet session={attendeesTarget} onClose={() => setAttendeesTarget(null)} />}
+        {editTarget && <EditSessionModal session={editTarget} onClose={() => setEditTarget(null)} />}
       </AnimatePresence>
     </div>
   );
@@ -297,12 +413,14 @@ function WeeklyCalendar() {
 
 /* ─── Main Component ─────────────────────────────────────────────────── */
 export function ClassesAdmin() {
+  useEffect(() => {
+    const handler = () => { window.location.href = '/admin/programacion'; };
+    window.addEventListener('fitvang:ir-programacion', handler);
+    return () => window.removeEventListener('fitvang:ir-programacion', handler);
+  }, []);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Clases</h1>
-        <p className="text-sm text-muted-foreground mt-1">Horario semanal · toca una clase para ver reservados.</p>
-      </div>
       <WeeklyCalendar />
     </div>
   );

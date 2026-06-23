@@ -30,7 +30,11 @@ const { title = "Fitvang" } = Astro.props;
     <meta name="description" content="Club de entrenamiento funcional y fútbol funcional — Cali" />
     <title>{title}</title>
   </head>
-  <body class="min-h-screen bg-background text-foreground">
+  <body class="min-h-screen bg-background text-foreground" style="opacity:0;transition:opacity 0.25s ease;">
+    <!-- Page transition bar -->
+    <div id="page-loader" style="position:fixed;top:0;left:0;right:0;z-index:9999;height:2px;pointer-events:none;">
+      <div id="page-loader-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#3DC4DB,#4DD4E8);border-radius:0 2px 2px 0;box-shadow:0 0 10px rgba(61,196,219,0.7);opacity:0;transition:opacity 0.2s ease;"></div>
+    </div>
     <slot />
     <script>
       if ('serviceWorker' in navigator) {
@@ -38,6 +42,68 @@ const { title = "Fitvang" } = Astro.props;
           navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
         });
       }
+
+      (function () {
+        const body = document.body;
+        const bar  = document.getElementById('page-loader-bar') as HTMLElement;
+
+        // ── Fade in on arrival ──────────────────────────────────────────
+        function fadeIn() {
+          body.style.opacity = '1';
+        }
+        // requestAnimationFrame ensures paint happens before transition
+        requestAnimationFrame(() => requestAnimationFrame(fadeIn));
+
+        // ── Progress bar ────────────────────────────────────────────────
+        let raf: number | null = null;
+        let prog = 0;
+
+        function startBar() {
+          bar.style.opacity = '1';
+          prog = 0;
+          bar.style.transition = 'none';
+          bar.style.width = '0%';
+
+          function tick() {
+            prog += (78 - prog) * 0.06;
+            bar.style.width = prog + '%';
+            raf = requestAnimationFrame(tick);
+          }
+          raf = requestAnimationFrame(tick);
+        }
+
+        function finishBar() {
+          if (raf) cancelAnimationFrame(raf);
+          bar.style.transition = 'width 0.15s ease';
+          bar.style.width = '100%';
+          setTimeout(() => { bar.style.opacity = '0'; bar.style.width = '0%'; }, 220);
+        }
+
+        // ── Fade-out + bar on navigation ────────────────────────────────
+        function onNavigate() {
+          body.style.transition = 'opacity 0.18s ease';
+          body.style.opacity = '0';
+          startBar();
+        }
+
+        // Link clicks
+        document.addEventListener('click', (e) => {
+          const a = (e.target as Element)?.closest('a');
+          if (!a) return;
+          const href = a.getAttribute('href') ?? '';
+          if (!href || href.startsWith('#') || href.startsWith('mailto:') || a.target === '_blank') return;
+          if (href.startsWith('http') && !href.includes(location.hostname)) return;
+          onNavigate();
+        });
+
+        // Programmatic navigations (location.href = ..., replace, etc.)
+        window.addEventListener('beforeunload', onNavigate);
+
+        // Clean up bar if user presses back/forward
+        window.addEventListener('pageshow', (e) => {
+          if (e.persisted) { body.style.opacity = '1'; finishBar(); }
+        });
+      })();
     </script>
   </body>
 </html>

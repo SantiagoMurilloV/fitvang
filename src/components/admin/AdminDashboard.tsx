@@ -181,10 +181,7 @@ export function AdminDashboard() {
   return (
     <>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Fitvang</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">{format(new Date(), "EEEE d 'de' MMMM", { locale: es })}</p>
-        </div>
+        <p className="text-xs text-muted-foreground">{format(new Date(), "EEEE d 'de' MMMM", { locale: es })}</p>
 
         {/* KPI 2×2 */}
         <div className="grid grid-cols-2 gap-3">

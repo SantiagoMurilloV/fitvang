@@ -1,45 +1,103 @@
 import { useState, type FormEvent } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { motion } from 'motion/react';
-import { toast, Toaster } from 'sonner';
+import { motion, AnimatePresence } from 'motion/react';
 import { api, ApiError } from '@/lib/api';
-import { Button } from '@/components/shared/Button';
 
 interface LoginResp {
   user: { id: string; nombre: string; rol: 'super_admin' | 'coach' | 'user'; email: string };
   redirect: string;
 }
 
+/* ─── Welcome screen after login ────────────────────────────────────── */
+function WelcomeScreen({ nombre }: { nombre: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background gap-6"
+    >
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ delay: 0.1, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        className="text-center"
+      >
+        <div className="relative inline-block mb-6">
+          <div className="absolute inset-0 rounded-full bg-primary/30 blur-3xl scale-150 pointer-events-none" />
+          <img
+            src="/icons/logo.png"
+            alt="Fitvang"
+            className="relative h-20 w-auto object-contain mx-auto drop-shadow-[0_0_24px_rgba(61,196,219,0.6)]"
+          />
+        </div>
+        <p className="text-2xl font-bold">¡Bienvenido, {nombre}!</p>
+        <p className="text-sm text-muted-foreground mt-1">Cargando tu espacio…</p>
+      </motion.div>
+
+      {/* Progress bar */}
+      <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
+        <motion.div
+          className="h-full rounded-full"
+          style={{ background: 'linear-gradient(90deg,#3DC4DB,#4DD4E8)' }}
+          initial={{ width: '0%' }}
+          animate={{ width: '100%' }}
+          transition={{ duration: 1.4, ease: 'easeInOut' }}
+        />
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─── Error banner ───────────────────────────────────────────────────── */
+const ERROR_MESSAGES: Record<number, string> = {
+  401: 'El email o la contraseña no coinciden. Revísalos e intenta de nuevo.',
+  429: 'Demasiados intentos seguidos. Espera un momento y vuelve a intentarlo.',
+  0:   'Sin conexión. Revisa tu red e intenta de nuevo.',
+};
+
+function errorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    return ERROR_MESSAGES[err.status] ?? 'Algo salió mal de nuestro lado. Intenta en unos segundos.';
+  }
+  return ERROR_MESSAGES[0];
+}
+
+/* ─── Main ───────────────────────────────────────────────────────────── */
 export default function LoginForm({ next }: { next?: string }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [welcome, setWelcome] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    setError('');
     setLoading(true);
     try {
       const data = await api.post<LoginResp>('/auth/login', {
         email: email.toLowerCase().trim(),
         password,
       });
-      toast.success(`¡Bienvenido, ${data.user.nombre.split(' ')[0]}!`);
-      window.location.href = next || data.redirect;
+      const firstName = data.user.nombre.split(' ')[0];
+      setWelcome(firstName);
+      // Redirect after bar animation finishes
+      setTimeout(() => {
+        window.location.href = next || data.redirect;
+      }, 1500);
     } catch (err) {
-      if (err instanceof ApiError) {
-        if (err.status === 401) toast.error('Email o contraseña incorrectos.');
-        else if (err.status === 429) toast.error('Muchos intentos. Espera un minuto.');
-        else toast.error('No pudimos iniciar sesión. Intenta de nuevo.');
-      } else toast.error('Error de red.');
-    } finally {
+      setError(errorMessage(err));
       setLoading(false);
     }
   }
 
   return (
     <>
-      <Toaster theme="dark" position="top-center" />
+      <AnimatePresence>
+        {welcome && <WelcomeScreen nombre={welcome} />}
+      </AnimatePresence>
+
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -49,7 +107,6 @@ export default function LoginForm({ next }: { next?: string }) {
         {/* Logo + tagline */}
         <div className="text-center mb-8">
           <div className="relative inline-block">
-            {/* Glow halo behind logo */}
             <div className="absolute inset-0 rounded-full bg-primary/20 blur-2xl scale-110 pointer-events-none" />
             <img
               src="/icons/logo.png"
@@ -62,6 +119,22 @@ export default function LoginForm({ next }: { next?: string }) {
           </p>
         </div>
 
+        {/* Error banner */}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -8, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: 'auto' }}
+              exit={{ opacity: 0, y: -8, height: 0 }}
+              className="mb-4 overflow-hidden"
+            >
+              <div className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/25 text-sm text-red-300 leading-snug">
+                {error}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Form */}
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
@@ -72,7 +145,7 @@ export default function LoginForm({ next }: { next?: string }) {
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); setError(''); }}
               autoComplete="email"
               className="w-full h-12 px-4 rounded-xl bg-card border border-border focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition text-sm"
               placeholder="tu@email.com"
@@ -87,7 +160,7 @@ export default function LoginForm({ next }: { next?: string }) {
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); setError(''); }}
                 autoComplete="current-password"
                 className="w-full h-12 px-4 pr-11 rounded-xl bg-card border border-border focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition text-sm"
                 placeholder="••••••••"
@@ -106,19 +179,13 @@ export default function LoginForm({ next }: { next?: string }) {
 
           <button
             type="submit"
-            disabled={loading}
-            className={`
-              w-full h-13 rounded-xl bg-primary text-[#0D0D0D] font-bold text-base
-              transition-all disabled:opacity-60 disabled:cursor-not-allowed
-              hover:brightness-110 hover:shadow-[0_0_20px_rgba(61,196,219,0.4)]
-              active:scale-[0.98]
-              flex items-center justify-center gap-2
-            `}
+            disabled={loading || !!welcome}
+            className="w-full h-13 rounded-xl bg-primary text-[#0D0D0D] font-bold text-base transition-all disabled:opacity-60 disabled:cursor-not-allowed hover:brightness-110 hover:shadow-[0_0_20px_rgba(61,196,219,0.4)] active:scale-[0.98] flex items-center justify-center gap-2"
           >
             {loading && (
               <span className="inline-block size-4 rounded-full border-2 border-[#0D0D0D] border-t-transparent animate-spin" />
             )}
-            Entrar
+            {loading ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
 

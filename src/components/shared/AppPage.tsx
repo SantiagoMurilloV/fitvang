@@ -22,6 +22,8 @@ import {
   Share,
   X,
   LogOut,
+  Settings,
+  Plus,
 } from 'lucide-react';
 
 interface Props {
@@ -48,6 +50,7 @@ const ADMIN_TABS = [
   { label: 'Clases', href: '/admin/clases', icon: BookOpen },
   { label: 'Pagos', href: '/admin/pagos', icon: Wallet },
   { label: 'Planes', href: '/admin/planes', icon: Tag },
+  { label: 'Config', href: '/admin/configuracion', icon: Settings },
 ];
 
 const VARIANT_TABS = { app: APP_TABS, coach: COACH_TABS, admin: ADMIN_TABS };
@@ -148,10 +151,65 @@ async function handleLogout() {
   }
 }
 
+// ── Configuración del header por ruta ──────────────────────────────────
+interface HeaderConfig {
+  title: string;           // título que aparece en el header
+  back?: string;           // href para flecha de regreso (si aplica)
+  action?: {
+    label: string;
+    event: string;   // nombre del CustomEvent a disparar
+  };
+}
+
+function getHeaderConfig(variant: string): HeaderConfig {
+  if (typeof window === 'undefined') return { title: '' };
+  const path = window.location.pathname;
+
+  // Rutas admin
+  if (variant === 'admin') {
+    if (path === '/admin') return { title: '' };
+    if (path.startsWith('/admin/usuarios')) return {
+      title: 'Usuarios',
+      action: { label: 'Nuevo', event: 'fitvang:crear-usuario' },
+    };
+    if (path.startsWith('/admin/clases')) return {
+      title: 'Clases',
+      action: { label: 'Mis clases', event: 'fitvang:ir-programacion' },
+    };
+    if (path.startsWith('/admin/programacion')) return {
+      title: 'Mis clases',
+      action: { label: 'Nueva clase', event: 'fitvang:crear-clase' },
+    };
+    if (path.startsWith('/admin/pagos')) return { title: 'Pagos' };
+    if (path.startsWith('/admin/planes')) return {
+      title: 'Planes',
+      action: { label: 'Nuevo', event: 'fitvang:crear-plan' },
+    };
+    if (path.startsWith('/admin/configuracion')) return { title: 'Configuración' };
+  }
+
+  // Rutas app usuario
+  if (variant === 'app') {
+    if (path === '/app') return { title: '' };
+    if (path.startsWith('/app/horarios')) return { title: 'Horarios' };
+    if (path.startsWith('/app/asistencias')) return { title: 'Scoring' };
+    if (path.startsWith('/app/pagos')) return { title: 'Pagos' };
+    if (path.startsWith('/app/perfil')) return { title: 'Perfil' };
+    if (path.startsWith('/app/recorrido')) return { title: 'Mi Recorrido' };
+  }
+
+  // Rutas coach
+  if (variant === 'coach') return { title: '' };
+
+  return { title: '' };
+}
+
 function Shell({ user, variant, children }: Props) {
   const setUser = useAuth((s) => s.setUser);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const { show: showIosBanner, dismiss: dismissIosBanner } = useIosInstallBanner();
+  const header = getHeaderConfig(variant);
+  const isDashboard = !header.title; // sin título = home/dashboard
 
   useEffect(() => {
     setUser(user);
@@ -165,22 +223,32 @@ function Shell({ user, variant, children }: Props) {
     }
   }, [user, setUser]);
 
-  const roleLabel: Record<string, string> = {
-    app: 'Miembro',
-    coach: 'Coach',
-    admin: 'Admin',
-  };
+  const roleLabel: Record<string, string> = { app: 'Miembro', coach: 'Coach', admin: 'Admin' };
 
   return (
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-30 flex items-center justify-between px-4 h-14 border-b border-border bg-background/90 backdrop-blur-md">
-        <a href="/" className="flex items-center gap-2">
-          <img src="/icons/logo.png" alt="Fitvang" className="h-7 w-auto object-contain" />
+
+        {/* Izquierda: logo (dashboard) o flecha+título (sección) */}
+        {isDashboard ? (
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground border border-border rounded px-1.5 py-0.5">
             {roleLabel[variant] ?? variant}
           </span>
-        </a>
+        ) : (
+          <h1 className="text-base font-bold">{header.title}</h1>
+        )}
+
+        {/* Derecha: acción contextual + notificaciones + logout */}
         <div className="flex items-center gap-2">
+          {header.action && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent(header.action!.event))}
+              className="flex items-center gap-1 px-3 h-8 rounded-full bg-primary/10 border border-primary/30 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
+            >
+              <Plus size={13} />
+              {header.action.label}
+            </button>
+          )}
           <NotificationBell />
           <button
             onClick={handleLogout}

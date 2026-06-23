@@ -75,11 +75,6 @@ export function PaymentsAdmin() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Gestión de Pagos</h1>
-        <p className="text-sm text-muted-foreground mt-1">Historial global de transacciones.</p>
-      </div>
-
       {isLoading ? (
         <div className="grid grid-cols-2 gap-3">
           <div className="h-24 rounded-2xl bg-card animate-pulse" />

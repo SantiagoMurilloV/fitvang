@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Pencil, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, StatCard } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
@@ -252,6 +252,12 @@ export function PlansAdmin() {
   const [showForm, setShowForm] = useState(false);
   const [editPlan, setEditPlan] = useState<PlanType | null>(null);
 
+  useEffect(() => {
+    const handler = () => { setEditPlan(null); setShowForm(true); };
+    window.addEventListener('fitvang:crear-plan', handler);
+    return () => window.removeEventListener('fitvang:crear-plan', handler);
+  }, []);
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['plan-types'],
     queryFn: () => api.get<{ planTypes: PlanType[] }>('/plans/types'),
@@ -279,15 +285,6 @@ export function PlansAdmin() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Planes</h1>
-          <p className="text-sm text-muted-foreground mt-1">Tipos de planes y precios.</p>
-        </div>
-        <Button size="sm" onClick={() => { setEditPlan(null); setShowForm(true); }}>
-          <Plus size={14} /> Nuevo
-        </Button>
-      </div>
 
       {!isLoading && !isError && (
         <div className="grid grid-cols-2 gap-3">

@@ -15,6 +15,8 @@ import { UsersAdmin } from './admin/UsersAdmin';
 import { ClassesAdmin } from './admin/ClassesAdmin';
 import { PaymentsAdmin } from './admin/PaymentsAdmin';
 import { PlansAdmin } from './admin/PlansAdmin';
+import { ConfigAdmin } from './admin/ConfigAdmin';
+import { SchedulerAdmin } from './admin/SchedulerAdmin';
 
 const VIEWS = {
   'user/home': { variant: 'app' as const, allowedRoles: ['super_admin', 'coach', 'user'] as const, render: () => <UserDashboard /> },
@@ -29,6 +31,8 @@ const VIEWS = {
   'admin/clases': { variant: 'admin' as const, allowedRoles: ['super_admin'] as const, render: () => <ClassesAdmin /> },
   'admin/pagos': { variant: 'admin' as const, allowedRoles: ['super_admin'] as const, render: () => <PaymentsAdmin /> },
   'admin/planes': { variant: 'admin' as const, allowedRoles: ['super_admin'] as const, render: () => <PlansAdmin /> },
+  'admin/config': { variant: 'admin' as const, allowedRoles: ['super_admin'] as const, render: () => <ConfigAdmin /> },
+  'admin/scheduler': { variant: 'admin' as const, allowedRoles: ['super_admin'] as const, render: () => <SchedulerAdmin /> },
 } as const;
 
 export type ViewKey = keyof typeof VIEWS;
