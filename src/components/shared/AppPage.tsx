@@ -227,7 +227,10 @@ function Shell({ user, variant, children }: Props) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="sticky top-0 z-30 flex items-center justify-between px-4 h-14 border-b border-border bg-background/90 backdrop-blur-md">
+      <header
+        className="sticky top-0 z-30 flex items-center justify-between px-4 border-b border-border bg-background/90 backdrop-blur-md"
+        style={{ paddingTop: 'env(safe-area-inset-top)', minHeight: 'calc(56px + env(safe-area-inset-top))' }}
+      >
 
         {/* Izquierda: logo (dashboard) o flecha+título (sección) */}
         {isDashboard ? (
