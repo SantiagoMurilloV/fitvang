@@ -4,8 +4,10 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { queryClient } from '@/lib/query';
 import { registerPush } from '@/lib/push';
 import { useAuth, type SessionUser } from '@/lib/auth-store';
+import { api } from '@/lib/api';
 import { NotificationBell } from './NotificationBell';
 import { PushPromptModal } from './PushPromptModal';
+import Swal from 'sweetalert2';
 import {
   Home,
   Calendar,
@@ -19,6 +21,7 @@ import {
   Tag,
   Share,
   X,
+  LogOut,
 } from 'lucide-react';
 
 interface Props {
@@ -91,7 +94,6 @@ function BottomNav({ variant }: { variant: 'app' | 'coach' | 'admin' }) {
   );
 }
 
-// Detecta si es iOS Safari fuera de modo standalone (candidato a instalar)
 function useIosInstallBanner() {
   const [show, setShow] = useState(false);
   useEffect(() => {
@@ -120,6 +122,32 @@ function IosBanner({ onDismiss }: { onDismiss: () => void }) {
   );
 }
 
+async function handleLogout() {
+  const result = await Swal.fire({
+    title: '¿Cerrar sesión?',
+    text: 'Tendrás que volver a iniciar sesión para acceder.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Sí, salir',
+    cancelButtonText: 'Cancelar',
+    background: '#0f0f11',
+    color: '#f8f8f8',
+    confirmButtonColor: '#3DC4DB',
+    cancelButtonColor: '#2a2a2f',
+    customClass: {
+      popup: 'rounded-2xl border border-white/10',
+      confirmButton: 'rounded-xl font-semibold',
+      cancelButton: 'rounded-xl font-semibold',
+    },
+    reverseButtons: true,
+  });
+
+  if (result.isConfirmed) {
+    await api.post('/auth/logout');
+    window.location.href = '/';
+  }
+}
+
 function Shell({ user, variant, children }: Props) {
   const setUser = useAuth((s) => s.setUser);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
@@ -127,7 +155,6 @@ function Shell({ user, variant, children }: Props) {
 
   useEffect(() => {
     setUser(user);
-
     if (
       typeof Notification !== 'undefined' &&
       Notification.permission === 'default'
@@ -137,25 +164,6 @@ function Shell({ user, variant, children }: Props) {
       registerPush().catch(() => {});
     }
   }, [user, setUser]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (
-        typeof Notification !== 'undefined' &&
-        Notification.permission === 'default'
-      ) {
-        setShowPushPrompt(true);
-      }
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const initials = user.nombre
-    .split(' ')
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
 
   const roleLabel: Record<string, string> = {
     app: 'Miembro',
@@ -175,15 +183,11 @@ function Shell({ user, variant, children }: Props) {
         <div className="flex items-center gap-2">
           <NotificationBell />
           <button
-            onClick={() =>
-              fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).then(
-                () => (window.location.href = '/'),
-              )
-            }
-            className="size-8 rounded-full bg-card border border-border flex items-center justify-center text-xs font-bold text-primary hover:bg-primary hover:text-background transition-colors"
+            onClick={handleLogout}
+            className="size-9 rounded-full bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-red-400 hover:border-red-400/50 transition-colors"
             title="Cerrar sesión"
           >
-            {initials}
+            <LogOut size={16} />
           </button>
         </div>
       </header>
@@ -198,11 +202,13 @@ function Shell({ user, variant, children }: Props) {
   );
 }
 
-export function AppPage(props: Props) {
+export function AppPage({ user, variant, children }: Props) {
   return (
     <QueryClientProvider client={queryClient}>
-      <Shell {...props} />
-      <Toaster theme="dark" position="top-center" />
+      <Shell user={user} variant={variant}>
+        {children}
+      </Shell>
+      <Toaster position="top-center" richColors />
     </QueryClientProvider>
   );
 }
