@@ -80,11 +80,12 @@ export function NotificationBell() {
       {open && createPortal(
         <div className="fixed inset-0 z-[300] flex justify-end" onClick={() => setOpen(false)}>
           <div
-            className="w-full max-w-sm h-full flex flex-col bg-[#111] border-l border-white/10 shadow-2xl"
+            className="w-full max-w-sm flex flex-col bg-[#111] border-l border-white/10 shadow-2xl"
+            style={{ paddingTop: 'env(safe-area-inset-top)', height: '100%' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header fijo */}
-            <div className="flex-none flex items-center justify-between p-4 border-b border-white/10" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
+            <div className="flex-none flex items-center justify-between px-4 py-4 border-b border-white/10">
               <h2 className="font-bold text-lg text-white">Notificaciones</h2>
               <div className="flex items-center gap-3">
                 {unread > 0 && (
