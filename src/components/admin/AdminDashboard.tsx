@@ -143,8 +143,10 @@ function StudentsProgressModal({ onClose }: { onClose: () => void }) {
             const initials = u.nombre.split(' ').map((s) => s[0]).slice(0, 2).join('');
             return (
               <a key={u.id} href={`/admin/usuarios?perfil=${u.id}`} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
-                <div className="size-10 rounded-full bg-primary/20 grid place-items-center text-sm font-bold text-primary flex-shrink-0">
-                  {initials}
+                <div className="size-10 rounded-full bg-primary/20 grid place-items-center text-sm font-bold text-primary flex-shrink-0 overflow-hidden">
+                  {u.avatarUrl
+                    ? <img src={u.avatarUrl} alt={u.nombre} className="size-full object-cover" />
+                    : initials}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">{u.nombre}</p>

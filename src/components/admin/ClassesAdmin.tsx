@@ -29,6 +29,7 @@ interface Attendee {
   bookingId: string;
   userId: string;
   nombre: string;
+  avatarUrl?: string | null;
   estado: 'activa' | 'asistio' | 'no_asistio';
   esMenor: boolean;
 }
@@ -73,8 +74,10 @@ function AttendeesSheet({ session, onClose }: { session: Session; onClose: () =>
               const statColor = a.estado === 'asistio' ? 'text-green-400' : a.estado === 'no_asistio' ? 'text-red-400' : 'text-blue-400';
               return (
                 <div key={a.bookingId} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5">
-                  <div className="size-9 rounded-full bg-white/10 grid place-items-center text-xs font-bold shrink-0">
-                    {initials}
+                  <div className="size-9 rounded-full bg-white/10 grid place-items-center text-xs font-bold shrink-0 overflow-hidden">
+                    {a.avatarUrl
+                      ? <img src={a.avatarUrl} alt={a.nombre} className="size-full object-cover" />
+                      : initials}
                   </div>
                   <p className="flex-1 text-sm font-medium">{a.nombre}</p>
                   <span className={`text-[10px] font-semibold uppercase ${statColor}`}>{a.estado}</span>

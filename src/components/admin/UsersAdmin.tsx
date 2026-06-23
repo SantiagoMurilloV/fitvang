@@ -52,8 +52,10 @@ function UserRow({ u, onSelect }: { u: UserRow; onSelect: () => void }) {
   return (
     <Card className={`${!u.activo ? 'opacity-50' : ''}`}>
       <button onClick={onSelect} className="flex items-center gap-3 w-full text-left">
-        <div className="size-10 rounded-full bg-white/10 grid place-items-center text-sm font-bold shrink-0">
-          {initials}
+        <div className="size-10 rounded-full bg-white/10 grid place-items-center text-sm font-bold shrink-0 overflow-hidden">
+          {u.avatarUrl
+            ? <img src={u.avatarUrl} alt={u.nombre} className="size-full object-cover" />
+            : initials}
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm truncate">{u.nombre}</p>
