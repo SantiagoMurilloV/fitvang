@@ -84,7 +84,7 @@ export function NotificationBell() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header fijo */}
-            <div className="flex-none flex items-center justify-between p-4 border-b border-white/10">
+            <div className="flex-none flex items-center justify-between p-4 border-b border-white/10" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
               <h2 className="font-bold text-lg text-white">Notificaciones</h2>
               <div className="flex items-center gap-3">
                 {unread > 0 && (

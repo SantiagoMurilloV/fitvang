@@ -3,12 +3,14 @@ import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, X, ChevronLeft, DollarSign, Search, Users, Calendar, ChevronRight } from 'lucide-react';
+import { Check, X, ChevronLeft, DollarSign, Search, Users, Calendar, ChevronRight, Camera, Trash2 } from 'lucide-react';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { api } from '@/lib/api';
+import { uploadAvatar } from '@/lib/cloudinary';
 import { Card } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
 import { formatCop } from '@/lib/utils';
+import Swal from 'sweetalert2';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -431,14 +433,106 @@ function AlumnosTab() {
   );
 }
 
+// ─── Coach Profile Tab ────────────────────────────────────────────────────────
+
+function CoachProfileTab() {
+  const qc = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const { data, refetch } = useQuery({
+    queryKey: ['coach-me-profile'],
+    queryFn: () => api.get<{ user: { id: string; nombre: string; email: string; telefono?: string | null; avatarUrl?: string | null } }>('/users/me/profile'),
+  });
+
+  const u = data?.user;
+  const initials = u?.nombre.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() ?? '?';
+
+  async function handleFile(file: File) {
+    if (!file.type.startsWith('image/')) { toast.error('Solo se permiten imágenes.'); return; }
+    setUploading(true);
+    try {
+      const url = await uploadAvatar(file);
+      await api.patch('/users/me', { avatarUrl: url });
+      refetch();
+      qc.invalidateQueries({ queryKey: ['coach-me-profile'] });
+      toast.success('Foto actualizada ✓');
+    } catch {
+      toast.error('No se pudo subir la foto.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleRemove() {
+    const result = await Swal.fire({
+      title: 'Eliminar foto', text: '¿Quitar tu foto de perfil?', icon: 'warning',
+      showCancelButton: true, confirmButtonText: 'Sí, quitar', cancelButtonText: 'Cancelar',
+      background: '#0f0f11', color: '#f8f8f8', confirmButtonColor: '#ef4444', cancelButtonColor: '#2a2a2f',
+      customClass: { popup: 'rounded-2xl border border-white/10', confirmButton: 'rounded-xl font-semibold', cancelButton: 'rounded-xl font-semibold' },
+      reverseButtons: true,
+    });
+    if (!result.isConfirmed) return;
+    try {
+      await api.patch('/users/me', { avatarUrl: '' });
+      refetch();
+      toast.success('Foto eliminada');
+    } catch {
+      toast.error('No se pudo eliminar la foto.');
+    }
+  }
+
+  if (!u) return <div className="h-32 rounded-2xl bg-card animate-pulse" />;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col items-center gap-4 py-4">
+        <div className="relative">
+          <div className="size-24 rounded-full overflow-hidden bg-card border-2 border-primary/30 flex items-center justify-center">
+            {u.avatarUrl
+              ? <img src={u.avatarUrl} alt={u.nombre} className="size-full object-cover" />
+              : <span className="text-3xl font-bold text-primary">{initials}</span>
+            }
+          </div>
+          <button
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="absolute -bottom-1 -right-1 size-8 rounded-full bg-primary text-background flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors disabled:opacity-60"
+          >
+            {uploading
+              ? <span className="size-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+              : <Camera size={14} />
+            }
+          </button>
+          {u.avatarUrl && (
+            <button onClick={handleRemove} className="absolute -bottom-1 -left-1 size-6 rounded-full bg-red-500 flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors">
+              <Trash2 size={10} className="text-white" />
+            </button>
+          )}
+          <input ref={inputRef} type="file" accept="image/*" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+        </div>
+        <div className="text-center">
+          <p className="font-bold text-xl">{u.nombre}</p>
+          <p className="text-sm text-muted-foreground">{u.email}</p>
+          {u.telefono && <p className="text-xs text-muted-foreground mt-0.5">{u.telefono}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
-type CoachTab = 'hoy' | 'semana' | 'alumnos';
+type CoachTab = 'hoy' | 'semana' | 'alumnos' | 'perfil';
+
+import { User } from 'lucide-react';
 
 const TABS: { key: CoachTab; label: string; icon: typeof Calendar }[] = [
   { key: 'hoy', label: 'Hoy', icon: Calendar },
   { key: 'semana', label: 'Semana', icon: Calendar },
   { key: 'alumnos', label: 'Alumnos', icon: Users },
+  { key: 'perfil', label: 'Perfil', icon: User },
 ];
 
 export function CoachDashboard() {
@@ -477,6 +571,7 @@ export function CoachDashboard() {
           {tab === 'hoy' && <TodayTab />}
           {tab === 'semana' && <WeekTab />}
           {tab === 'alumnos' && <AlumnosTab />}
+          {tab === 'perfil' && <CoachProfileTab />}
         </motion.div>
       </AnimatePresence>
     </div>

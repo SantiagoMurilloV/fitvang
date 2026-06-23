@@ -7,6 +7,7 @@ import {
   User, Mail, Phone, CreditCard, Calendar, Weight, Ruler,
   Shield, Tag, Eye, EyeOff, Camera, Loader2, Trash2,
 } from 'lucide-react';
+import { uploadAvatar } from '@/lib/cloudinary';
 import { api } from '@/lib/api';
 import { Button } from '@/components/shared/Button';
 import Swal from 'sweetalert2';
@@ -54,24 +55,6 @@ interface ScoringData {
   asistenciasMes: number;
   rachaActual: number;
   puntajeMes: number;
-}
-
-const CLOUDINARY_CLOUD = 'dsg6dulng';
-const CLOUDINARY_PRESET = 'fitvang_avatars';
-
-async function uploadAvatar(file: File): Promise<string> {
-  const fd = new FormData();
-  fd.append('file', file);
-  fd.append('upload_preset', CLOUDINARY_PRESET);
-  fd.append('folder', 'fitvang/avatars');
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, {
-    method: 'POST',
-    body: fd,
-  });
-  if (!res.ok) throw new Error('Upload failed');
-  const data = await res.json();
-  // URL con transformación: face crop, 200×200, formato webp, calidad auto
-  return data.secure_url.replace('/upload/', '/upload/c_fill,g_face,w_200,h_200,f_webp,q_auto/');
 }
 
 function formatCop(n: number) {

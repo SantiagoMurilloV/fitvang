@@ -2,10 +2,12 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
-import { Camera, Edit2, Check, X, LogOut } from 'lucide-react';
+import { Camera, Edit2, Check, X, LogOut, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { uploadAvatar } from '@/lib/cloudinary';
 import { Card } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
+import Swal from 'sweetalert2';
 
 interface UserProfile {
   id: string;
@@ -44,31 +46,43 @@ function AvatarBlock({ profile, onAvatarChange }: { profile: UserProfile; onAvat
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
-  const initials = profile.nombre
-    .split(' ')
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const initials = profile.nombre.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   async function handleFile(file: File) {
     if (!file.type.startsWith('image/')) { toast.error('Solo se permiten imágenes.'); return; }
-    if (file.size > 4 * 1024 * 1024) { toast.error('La imagen no puede superar 4 MB.'); return; }
     setUploading(true);
     try {
-      const reader = new FileReader();
-      const dataUrl: string = await new Promise((res, rej) => {
-        reader.onload = () => res(reader.result as string);
-        reader.onerror = rej;
-        reader.readAsDataURL(file);
-      });
-      await api.patch('/users/me', { avatarUrl: dataUrl });
-      onAvatarChange(dataUrl);
+      const url = await uploadAvatar(file);
+      await api.patch('/users/me', { avatarUrl: url });
+      onAvatarChange(url);
       toast.success('Foto actualizada ✓');
     } catch {
       toast.error('No se pudo subir la foto.');
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleRemove() {
+    const result = await Swal.fire({
+      title: 'Eliminar foto',
+      text: '¿Quitar tu foto de perfil?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, quitar',
+      cancelButtonText: 'Cancelar',
+      background: '#0f0f11', color: '#f8f8f8',
+      confirmButtonColor: '#ef4444', cancelButtonColor: '#2a2a2f',
+      customClass: { popup: 'rounded-2xl border border-white/10', confirmButton: 'rounded-xl font-semibold', cancelButton: 'rounded-xl font-semibold' },
+      reverseButtons: true,
+    });
+    if (!result.isConfirmed) return;
+    try {
+      await api.patch('/users/me', { avatarUrl: '' });
+      onAvatarChange('');
+      toast.success('Foto eliminada');
+    } catch {
+      toast.error('No se pudo eliminar la foto.');
     }
   }
 
@@ -85,21 +99,24 @@ function AvatarBlock({ profile, onAvatarChange }: { profile: UserProfile; onAvat
         <button
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="absolute -bottom-1 -right-1 size-8 rounded-full bg-primary text-background flex items-center justify-center shadow-lg hover:bg-accent transition-colors disabled:opacity-60"
+          className="absolute -bottom-1 -right-1 size-8 rounded-full bg-primary text-background flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors disabled:opacity-60"
         >
-          {uploading ? (
-            <span className="size-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
-          ) : (
-            <Camera className="size-4" />
-          )}
+          {uploading
+            ? <span className="size-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+            : <Camera className="size-4" />
+          }
         </button>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-        />
+        {profile.avatarUrl && (
+          <button
+            onClick={handleRemove}
+            className="absolute -bottom-1 -left-1 size-6 rounded-full bg-red-500 flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors"
+            title="Eliminar foto"
+          >
+            <Trash2 size={10} className="text-white" />
+          </button>
+        )}
+        <input ref={inputRef} type="file" accept="image/*" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
       </div>
       <div className="text-center">
         <p className="font-bold text-lg">{profile.nombre}</p>
