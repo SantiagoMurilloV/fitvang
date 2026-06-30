@@ -6,6 +6,7 @@ import {
   ChevronLeft, Check, ToggleLeft, ToggleRight,
   User, Phone, Mail, CreditCard, Calendar, Weight, Ruler,
   Tag, Eye, EyeOff, Camera, Loader2, Trash2, Lock, Pencil,
+  FileText, ExternalLink,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
@@ -34,6 +35,8 @@ interface ProfileUser {
   bio?: string | null;
   createdAt: string;
   passwordPlain?: string | null;
+  terminosAceptadosAt?: string | null;
+  terminosDocUrl?: string | null;
 }
 
 interface PlanActivo {
@@ -171,6 +174,44 @@ function NameField({ nombre, userId }: { nombre: string; userId: string }) {
 }
 
 /* ─── Campo contraseña inline ───────────────────────────────────────── */
+function TerminosRow({ aceptadosAt, docUrl }: { aceptadosAt?: string | null; docUrl?: string | null }) {
+  const aceptados = !!aceptadosAt;
+  return (
+    <div className="rounded-2xl bg-card border border-border p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <FileText className="size-4 text-muted-foreground shrink-0" />
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Términos y condiciones</p>
+      </div>
+
+      {aceptados ? (
+        <>
+          <p className="text-sm text-foreground/90">
+            Aceptados el{' '}
+            <span className="font-semibold">
+              {new Date(aceptadosAt!).toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })}
+            </span>
+          </p>
+          {docUrl ? (
+            <a
+              href={docUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-primary/15 border border-primary/30 text-primary text-sm font-semibold hover:bg-primary/25 active:scale-[0.98] transition"
+            >
+              <ExternalLink className="size-4" />
+              Ver documento firmado
+            </a>
+          ) : (
+            <p className="text-xs text-muted-foreground">Aceptados, pero no se generó el documento.</p>
+          )}
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">Aún no ha aceptado los términos y condiciones.</p>
+      )}
+    </div>
+  );
+}
+
 function PasswordField({ userId, value }: { userId: string; hasPassword?: boolean; value?: string | null }) {
   const qc = useQueryClient();
   const [current, setCurrent] = useState<string | null | undefined>(value);
@@ -742,6 +783,9 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
 
             {/* Contraseña — solo super_admin */}
             {isSuperAdmin && <PasswordField userId={userId} value={u.passwordPlain} />}
+
+            {/* Términos y condiciones */}
+            {isSuperAdmin && u.rol === 'user' && <TerminosRow aceptadosAt={u.terminosAceptadosAt} docUrl={u.terminosDocUrl} />}
           </div>
         )}
       </div>

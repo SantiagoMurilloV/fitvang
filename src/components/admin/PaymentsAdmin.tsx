@@ -6,6 +6,7 @@ import { format, parseISO, isThisMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { RotateCcw } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useUiAction } from '@/lib/ui-actions';
 import { Card, StatCard } from '@/components/shared/Card';
 import { formatCop } from '@/lib/utils';
 
@@ -55,6 +56,7 @@ const TABS: { key: FilterTab; label: string }[] = [
 export function PaymentsAdmin() {
   const [filter, setFilter] = useState<FilterTab>('todos');
   const qc = useQueryClient();
+  useUiAction('ir-finanzas', () => { window.location.href = '/admin/finanzas'; });
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-payments'],

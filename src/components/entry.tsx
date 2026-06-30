@@ -18,6 +18,7 @@ import { PaymentsAdmin } from './admin/PaymentsAdmin';
 import { PlansAdmin } from './admin/PlansAdmin';
 import { ConfigAdmin } from './admin/ConfigAdmin';
 import { SchedulerAdmin } from './admin/SchedulerAdmin';
+import { FinanzasAdmin } from './admin/FinanzasAdmin';
 
 const VIEWS = {
   'user/home': { variant: 'app' as const, render: () => <UserDashboard /> },
@@ -40,6 +41,7 @@ const VIEWS = {
   'admin/planes': { variant: 'admin' as const, render: () => <PlansAdmin /> },
   'admin/config': { variant: 'admin' as const, render: () => <ConfigAdmin /> },
   'admin/scheduler': { variant: 'admin' as const, render: () => <SchedulerAdmin /> },
+  'admin/finanzas': { variant: 'admin' as const, render: () => <FinanzasAdmin /> },
 } as const;
 
 export type ViewKey = keyof typeof VIEWS;

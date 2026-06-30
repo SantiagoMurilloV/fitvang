@@ -91,53 +91,6 @@ function LiveClassCard({ session }: { session: Session }) {
   );
 }
 
-function FinancialModal({ onClose }: { onClose: () => void }) {
-  const { data } = useQuery({
-    queryKey: ['admin-overview'],
-    queryFn: () => api.get<Overview>('/stats/admin/overview'),
-  });
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center p-4" onClick={onClose}>
-      <div className="w-full max-w-lg bg-card border border-border rounded-2xl p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold">Dashboard Financiero</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1"><X className="size-5" /></button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-4">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Ingresos mes</p>
-            <p className="text-2xl font-bold text-emerald-400 mt-1">
-              {data ? formatCop(data.ingresosMesCop) : '—'}
-            </p>
-          </div>
-          <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 p-4">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Planes activos</p>
-            <p className="text-2xl font-bold text-blue-400 mt-1">{data?.planesActivos ?? '—'}</p>
-          </div>
-        </div>
-
-        <div className="rounded-xl bg-white/5 border border-border p-4 space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tendencia</p>
-          <div className="flex items-end gap-1 h-16">
-            {[40, 65, 55, 80, 70, 90, 100].map((h, i) => (
-              <div key={i} className="flex-1 rounded-t" style={{ height: `${h}%`, backgroundColor: `rgba(61, 196, 219, ${0.3 + i * 0.1})` }} />
-            ))}
-          </div>
-          <div className="flex justify-between text-[10px] text-muted-foreground">
-            {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d) => <span key={d}>{d}</span>)}
-          </div>
-        </div>
-
-        <a href="/admin/pagos" className="block w-full text-center py-3 rounded-xl bg-primary text-background font-semibold text-sm hover:bg-primary/90 transition-colors">
-          Ver todos los pagos
-        </a>
-      </div>
-    </div>
-  );
-}
-
 interface Student {
   id: string;
   nombre: string;
@@ -687,7 +640,6 @@ function SendNotificationModal({ onClose }: { onClose: () => void }) {
 export function AdminDashboard() {
   const [now, setNow] = useState(nowInColombia);
   const today = format(now, 'yyyy-MM-dd');
-  const [showFinancial, setShowFinancial] = useState(false);
   const [showProgress, setShowProgress] = useState(false);
   const [showSend, setShowSend] = useState(false);
 
@@ -740,7 +692,7 @@ export function AdminDashboard() {
             iconColor="bg-emerald-500/10 text-emerald-400"
             value={overview ? formatCop(overview.ingresosMesCop) : '—'}
             label="Ingresos del mes"
-            onClick={() => setShowFinancial(true)}
+            onClick={() => { window.location.href = '/admin/finanzas'; }}
           />
           <KpiCard
             icon={BookOpen}
@@ -790,7 +742,6 @@ export function AdminDashboard() {
         )}
       </div>
 
-      {showFinancial && <FinancialModal onClose={() => setShowFinancial(false)} />}
       {showProgress && <StudentsProgressModal onClose={() => setShowProgress(false)} />}
       {showSend && <SendNotificationModal onClose={() => setShowSend(false)} />}
     </>

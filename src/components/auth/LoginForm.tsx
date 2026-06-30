@@ -203,6 +203,9 @@ export default function LoginForm({ next }: { next?: string }) {
         <p className="mt-2 text-center text-[11px] text-muted-foreground/50">
           ¿Olvidaste tu contraseña? Habla con tu entrenador o el admin.
         </p>
+        <p className="mt-4 text-center text-[10px] text-muted-foreground/40">
+          Fitvang · <a href="https://fitvang.com" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors">fitvang.com</a>
+        </p>
       </motion.div>
     </>
   );

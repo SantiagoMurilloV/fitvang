@@ -9,6 +9,7 @@ export interface SessionUser {
   avatarUrl?: string | null;
   esMenor?: boolean;
   esAcudiente?: boolean;
+  terminosAceptados?: boolean;
 }
 
 interface AuthState {

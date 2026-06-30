@@ -8,6 +8,8 @@ import { useUiActions, type UiAction } from '@/lib/ui-actions';
 import { api } from '@/lib/api';
 import { NotificationBell } from './NotificationBell';
 import { PushPromptModal } from './PushPromptModal';
+import { VangBubble } from './VangBubble';
+import { TermsModal } from './TermsModal';
 import Swal from 'sweetalert2';
 import {
   Home,
@@ -166,7 +168,7 @@ async function handleLogout() {
 interface HeaderAction {
   label: string;
   action: UiAction;
-  icon?: 'plus' | 'settings' | 'calendar';
+  icon?: 'plus' | 'settings' | 'calendar' | 'chart';
 }
 interface HeaderConfig {
   title: string;
@@ -182,6 +184,7 @@ function getHeaderConfig(variant: string): HeaderConfig {
   // Rutas admin
   if (variant === 'admin') {
     if (path === '/admin') return { title: '' };
+    if (path.startsWith('/admin/finanzas')) return { title: 'Análisis financiero', back: '/admin/pagos' };
     if (path.startsWith('/admin/usuarios')) return {
       title: 'Usuarios',
       actions: [
@@ -198,7 +201,7 @@ function getHeaderConfig(variant: string): HeaderConfig {
       back: '/admin/clases',
       action: { label: 'Nueva clase', action: 'crear-clase' },
     };
-    if (path.startsWith('/admin/pagos')) return { title: 'Pagos' };
+    if (path.startsWith('/admin/pagos')) return { title: 'Pagos', action: { label: 'Análisis financiero', action: 'ir-finanzas', icon: 'chart' } };
     if (path.startsWith('/admin/planes')) return {
       title: 'Planes',
       action: { label: 'Nuevo', action: 'crear-plan' },
@@ -236,6 +239,7 @@ function getHeaderConfig(variant: string): HeaderConfig {
 
 function Shell({ user, variant, children }: Props) {
   const setUser = useAuth((s) => s.setUser);
+  const authUser = useAuth((s) => s.user) ?? user;
   const fire = useUiActions((s) => s.fire);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -293,7 +297,7 @@ function Shell({ user, variant, children }: Props) {
               onClick={() => fire(a.action)}
               className="flex items-center gap-1 px-3 h-8 rounded-full bg-primary/10 border border-primary/30 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
             >
-              {a.icon === 'calendar' ? <Calendar size={13} /> : a.icon !== 'settings' ? <Plus size={13} /> : null}
+              {a.icon === 'calendar' ? <Calendar size={13} /> : a.icon === 'chart' ? <BarChart2 size={13} /> : a.icon !== 'settings' ? <Plus size={13} /> : null}
               {a.label}
             </button>
           ))}
@@ -317,6 +321,12 @@ function Shell({ user, variant, children }: Props) {
       </main>
 
       <BottomNav variant={variant} mounted={mounted} />
+
+      <VangBubble />
+
+      {authUser.rol === 'user' && !authUser.terminosAceptados && (
+        <TermsModal onAccepted={() => setUser({ ...authUser, terminosAceptados: true })} />
+      )}
 
       <PushPromptModal open={showPushPrompt} onClose={() => setShowPushPrompt(false)} />
       {showIosBanner && <IosBanner onDismiss={dismissIosBanner} />}
