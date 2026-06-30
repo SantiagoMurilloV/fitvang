@@ -6,11 +6,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Check, X, ChevronLeft, DollarSign, Search, Users, Calendar, ChevronRight, Camera, Trash2 } from 'lucide-react';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { api } from '@/lib/api';
-import { uploadAvatar } from '@/lib/cloudinary';
+import { useAvatarUpload } from '@/lib/useAvatarUpload';
 import { Card } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
 import { formatCop } from '@/lib/utils';
-import Swal from 'sweetalert2';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -438,7 +437,6 @@ function AlumnosTab() {
 function CoachProfileTab() {
   const qc = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
 
   const { data, refetch } = useQuery({
     queryKey: ['coach-me-profile'],
@@ -448,39 +446,10 @@ function CoachProfileTab() {
   const u = data?.user;
   const initials = u?.nombre.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() ?? '?';
 
-  async function handleFile(file: File) {
-    if (!file.type.startsWith('image/')) { toast.error('Solo se permiten imágenes.'); return; }
-    setUploading(true);
-    try {
-      const url = await uploadAvatar(file);
-      await api.patch('/users/me', { avatarUrl: url });
-      refetch();
-      qc.invalidateQueries({ queryKey: ['coach-me-profile'] });
-      toast.success('Foto actualizada ✓');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'No se pudo subir la foto.');
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function handleRemove() {
-    const result = await Swal.fire({
-      title: 'Eliminar foto', text: '¿Quitar tu foto de perfil?', icon: 'warning',
-      showCancelButton: true, confirmButtonText: 'Sí, quitar', cancelButtonText: 'Cancelar',
-      background: '#0f0f11', color: '#f8f8f8', confirmButtonColor: '#ef4444', cancelButtonColor: '#2a2a2f',
-      customClass: { popup: 'rounded-2xl border border-white/10', confirmButton: 'rounded-xl font-semibold', cancelButton: 'rounded-xl font-semibold' },
-      reverseButtons: true,
-    });
-    if (!result.isConfirmed) return;
-    try {
-      await api.patch('/users/me', { avatarUrl: '' });
-      refetch();
-      toast.success('Foto eliminada');
-    } catch {
-      toast.error('No se pudo eliminar la foto.');
-    }
-  }
+  const { uploading, upload, remove } = useAvatarUpload({
+    patchPath: '/users/me',
+    onDone: () => { refetch(); qc.invalidateQueries({ queryKey: ['coach-me-profile'] }); },
+  });
 
   if (!u) return <div className="h-32 rounded-2xl bg-card animate-pulse" />;
 
@@ -505,12 +474,12 @@ function CoachProfileTab() {
             }
           </button>
           {u.avatarUrl && (
-            <button onClick={handleRemove} className="absolute -bottom-1 -left-1 size-6 rounded-full bg-red-500 flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors">
+            <button onClick={remove} className="absolute -bottom-1 -left-1 size-6 rounded-full bg-red-500 flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors">
               <Trash2 size={10} className="text-white" />
             </button>
           )}
           <input ref={inputRef} type="file" accept="image/*" className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
         </div>
         <div className="text-center">
           <p className="font-bold text-xl">{u.nombre}</p>

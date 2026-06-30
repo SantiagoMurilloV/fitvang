@@ -86,8 +86,12 @@ export function UserDashboard() {
   const diasRestantes = p
     ? Math.max(0, Math.ceil((new Date(p.fechaFin).getTime() - Date.now()) / 86400000))
     : 0;
-  const daysUsed = p ? 30 - diasRestantes : 0;
-  const progressPct = Math.min(100, (daysUsed / 30) * 100);
+  // Duración real del plan (fechaFin - fechaInicio), no 30 días fijos.
+  const totalDays = p
+    ? Math.max(1, Math.round((new Date(p.fechaFin).getTime() - new Date(p.fechaInicio).getTime()) / 86400000))
+    : 1;
+  const daysUsed = Math.max(0, totalDays - diasRestantes);
+  const progressPct = Math.min(100, Math.round((daysUsed / totalDays) * 100));
 
   const sc = scoring.data;
   const nivel = sc?.nivel ?? 'rookie';

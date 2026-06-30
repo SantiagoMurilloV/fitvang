@@ -5,6 +5,7 @@ import { format, parseISO, isThisMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { api } from '@/lib/api';
 import { Card, StatCard } from '@/components/shared/Card';
+import { formatCop } from '@/lib/utils';
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
 interface Payment {
@@ -21,9 +22,7 @@ interface Payment {
 type FilterTab = 'todos' | 'exitoso' | 'pendiente' | 'fallido';
 
 /* ─── Helpers ────────────────────────────────────────────────────────── */
-function formatCop(n: number) {
-  return n.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
-}
+// formatCop ahora vive en @/lib/utils (antes redefinido localmente)
 
 const ESTADO_STYLES: Record<Payment['estado'], string> = {
   exitoso: 'bg-green-500/15 text-green-400 border-green-500/30',

@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Plus, X, Check, Trash2, Clock, Users, CalendarDays, RefreshCw, Pencil } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { api } from '@/lib/api';
+import { useUiAction } from '@/lib/ui-actions';
 import { useAuth } from '@/lib/auth-store';
 import { Button } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
@@ -574,11 +575,7 @@ export function SchedulerAdmin() {
   const [showForm, setShowForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
 
-  useEffect(() => {
-    const handler = () => setShowForm(true);
-    window.addEventListener('fitvang:crear-clase', handler);
-    return () => window.removeEventListener('fitvang:crear-clase', handler);
-  }, []);
+  useUiAction('crear-clase', () => setShowForm(true));
 
   const { data: trainingData } = useQuery({
     queryKey: ['training-types'],

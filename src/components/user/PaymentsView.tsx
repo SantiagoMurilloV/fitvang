@@ -82,7 +82,17 @@ export function PaymentsView() {
         metodo: 'wompi_card',
       }),
     onSuccess: (d) => {
-      window.location.href = d.checkoutUrl;
+      // Validar destino antes de redirigir: solo dominios de Wompi.
+      try {
+        const host = new URL(d.checkoutUrl).hostname;
+        if (host === 'checkout.wompi.co' || host.endsWith('.wompi.co')) {
+          window.location.href = d.checkoutUrl;
+          return;
+        }
+      } catch {
+        /* URL inválida → cae al toast de error */
+      }
+      toast.error('No pudimos abrir el pago de forma segura. Intenta de nuevo.');
     },
     onError: () => toast.error('No pudimos abrir el pago. Intenta de nuevo.'),
   });

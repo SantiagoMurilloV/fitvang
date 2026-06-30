@@ -4,10 +4,10 @@ import { toast } from 'sonner';
 import { motion } from 'motion/react';
 import { Camera, Edit2, Check, X, LogOut, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { uploadAvatar } from '@/lib/cloudinary';
+import { useAvatarUpload } from '@/lib/useAvatarUpload';
+import { useInlineEdit } from '@/lib/useInlineEdit';
 import { Card } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
-import Swal from 'sweetalert2';
 
 interface UserProfile {
   id: string;
@@ -48,61 +48,15 @@ function AvatarBlock({ profile, onAvatarChange, onNameSave }: {
   onNameSave: (name: string) => Promise<void>;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [editingName, setEditingName] = useState(false);
-  const [nameDraft, setNameDraft] = useState(profile.nombre);
-  const [savingName, setSavingName] = useState(false);
-
-  async function saveName() {
-    if (!nameDraft.trim() || nameDraft === profile.nombre) { setEditingName(false); return; }
-    setSavingName(true);
-    try {
-      await onNameSave(nameDraft.trim());
-      setEditingName(false);
-    } finally {
-      setSavingName(false);
-    }
-  }
+  const { uploading, upload, remove } = useAvatarUpload({ patchPath: '/users/me', onDone: onAvatarChange });
+  const name = useInlineEdit({
+    value: profile.nombre,
+    onSave: onNameSave,
+    normalize: (v) => v.trim(),
+    isUnchanged: (d, v) => !d || d === v,
+  });
 
   const initials = profile.nombre.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
-
-  async function handleFile(file: File) {
-    if (!file.type.startsWith('image/')) { toast.error('Solo se permiten imágenes.'); return; }
-    setUploading(true);
-    try {
-      const url = await uploadAvatar(file);
-      await api.patch('/users/me', { avatarUrl: url });
-      onAvatarChange(url);
-      toast.success('Foto actualizada ✓');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'No se pudo subir la foto.');
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function handleRemove() {
-    const result = await Swal.fire({
-      title: 'Eliminar foto',
-      text: '¿Quitar tu foto de perfil?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Sí, quitar',
-      cancelButtonText: 'Cancelar',
-      background: '#0f0f11', color: '#f8f8f8',
-      confirmButtonColor: '#ef4444', cancelButtonColor: '#2a2a2f',
-      customClass: { popup: 'rounded-2xl border border-white/10', confirmButton: 'rounded-xl font-semibold', cancelButton: 'rounded-xl font-semibold' },
-      reverseButtons: true,
-    });
-    if (!result.isConfirmed) return;
-    try {
-      await api.patch('/users/me', { avatarUrl: '' });
-      onAvatarChange('');
-      toast.success('Foto eliminada');
-    } catch {
-      toast.error('No se pudo eliminar la foto.');
-    }
-  }
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -126,7 +80,7 @@ function AvatarBlock({ profile, onAvatarChange, onNameSave }: {
         </button>
         {profile.avatarUrl && (
           <button
-            onClick={handleRemove}
+            onClick={remove}
             className="absolute -bottom-1 -left-1 size-6 rounded-full bg-red-500 flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors"
             title="Eliminar foto"
           >
@@ -134,33 +88,33 @@ function AvatarBlock({ profile, onAvatarChange, onNameSave }: {
           </button>
         )}
         <input ref={inputRef} type="file" accept="image/*" className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
       </div>
       <div className="text-center">
-        {editingName ? (
+        {name.editing ? (
           <div className="flex items-center gap-2 justify-center">
             <input
               autoFocus
-              value={nameDraft}
-              onChange={(e) => setNameDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameDraft(profile.nombre); setEditingName(false); } }}
+              value={name.draft}
+              onChange={(e) => name.setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') name.save(); if (e.key === 'Escape') name.cancel(); }}
               maxLength={120}
               className="h-9 px-3 rounded-xl bg-background border border-primary text-sm text-center outline-none w-48"
             />
             <button
-              onClick={saveName}
-              disabled={savingName}
+              onClick={name.save}
+              disabled={name.saving}
               className="size-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 disabled:opacity-50 shrink-0"
             >
-              {savingName ? <span className="size-3 rounded-full border-2 border-current border-t-transparent animate-spin" /> : <Check size={14} />}
+              {name.saving ? <span className="size-3 rounded-full border-2 border-current border-t-transparent animate-spin" /> : <Check size={14} />}
             </button>
-            <button onClick={() => { setNameDraft(profile.nombre); setEditingName(false); }} className="size-8 rounded-xl border border-border flex items-center justify-center hover:border-destructive hover:text-destructive shrink-0">
+            <button onClick={name.cancel} className="size-8 rounded-xl border border-border flex items-center justify-center hover:border-destructive hover:text-destructive shrink-0">
               <X size={14} />
             </button>
           </div>
         ) : (
           <button
-            onClick={() => { setNameDraft(profile.nombre); setEditingName(true); }}
+            onClick={name.start}
             className="flex items-center gap-1.5 justify-center"
           >
             <span className="font-bold text-lg">{profile.nombre}</span>
@@ -190,29 +144,14 @@ function EditableField({
   maxLength?: number;
   isTextarea?: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const [saving, setSaving] = useState(false);
-
-  async function save() {
-    if (draft === value) { setEditing(false); return; }
-    setSaving(true);
-    try {
-      await onSave(draft);
-      setEditing(false);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function cancel() { setDraft(value); setEditing(false); }
+  const { editing, draft, setDraft, saving, start, cancel, save } = useInlineEdit({ value, onSave });
 
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
         <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
         {!editing && (
-          <button onClick={() => setEditing(true)} className="text-primary/60 hover:text-primary transition-colors">
+          <button onClick={start} className="text-primary/60 hover:text-primary transition-colors">
             <Edit2 className="size-3.5" />
           </button>
         )}
@@ -289,7 +228,9 @@ export function ProfileView() {
   }
 
   function logout() {
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).then(() => {
+    // Antes pegaba a /api/auth/logout del origen del frontend (Vercel → 404) y las
+    // cookies del backend nunca se borraban. api.post va al backend real.
+    api.post('/auth/logout').catch(() => {}).finally(() => {
       window.location.href = '/';
     });
   }

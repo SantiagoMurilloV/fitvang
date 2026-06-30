@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -7,9 +7,11 @@ import {
   User, Phone, Mail, CreditCard, Calendar, Weight, Ruler,
   Tag, Eye, EyeOff, Camera, Loader2, Trash2, Lock,
 } from 'lucide-react';
-import { uploadAvatar } from '@/lib/cloudinary';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
+import { useAvatarUpload } from '@/lib/useAvatarUpload';
+import { useInlineEdit } from '@/lib/useInlineEdit';
+import { formatCop } from '@/lib/utils';
 import { Button } from '@/components/shared/Button';
 import Swal from 'sweetalert2';
 
@@ -59,9 +61,7 @@ interface ScoringData {
   puntajeMes: number;
 }
 
-function formatCop(n: number) {
-  return n.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
-}
+// formatCop ahora vive en @/lib/utils (antes redefinido localmente)
 
 /* ─── Campo editable inline ──────────────────────────────────────────── */
 function Field({
@@ -71,25 +71,20 @@ function Field({
   userId: string; fieldKey: string; type?: string;
 }) {
   const qc = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value ?? '');
-  const [saving, setSaving] = useState(false);
-
-  async function save() {
-    if (draft === (value ?? '')) { setEditing(false); return; }
-    setSaving(true);
-    try {
-      await api.patch(`/users/${userId}`, { [fieldKey]: draft || null });
-      qc.invalidateQueries({ queryKey: ['user-ficha', userId] });
-      qc.invalidateQueries({ queryKey: ['admin-users'] });
-      toast.success('Guardado');
-      setEditing(false);
-    } catch {
-      toast.error('No se pudo guardar');
-    } finally {
-      setSaving(false);
-    }
-  }
+  const { editing, draft, setDraft, saving, start, cancel, save } = useInlineEdit({
+    value: value ?? '',
+    onSave: async (v) => {
+      try {
+        await api.patch(`/users/${userId}`, { [fieldKey]: v || null });
+        qc.invalidateQueries({ queryKey: ['user-ficha', userId] });
+        qc.invalidateQueries({ queryKey: ['admin-users'] });
+        toast.success('Guardado');
+      } catch (e) {
+        toast.error('No se pudo guardar');
+        throw e;
+      }
+    },
+  });
 
   return (
     <div className="flex items-start gap-3 py-3 border-b border-border/50 last:border-0">
@@ -103,18 +98,18 @@ function Field({
               type={type}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setDraft(value ?? ''); setEditing(false); } }}
+              onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel(); }}
               className="flex-1 h-8 px-2 rounded-lg bg-background border border-primary text-sm outline-none"
             />
             <button onClick={save} disabled={saving} className="size-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center hover:bg-primary/25 transition-colors">
               {saving ? <span className="size-3 rounded-full border-2 border-current border-t-transparent animate-spin" /> : <Check size={13} />}
             </button>
-            <button onClick={() => { setDraft(value ?? ''); setEditing(false); }} className="size-8 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+            <button onClick={cancel} className="size-8 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
               <EyeOff size={13} />
             </button>
           </div>
         ) : (
-          <button onClick={() => { setDraft(value ?? ''); setEditing(true); }} className="w-full text-left group flex items-center justify-between gap-2 mt-0.5">
+          <button onClick={start} className="w-full text-left group flex items-center justify-between gap-2 mt-0.5">
             <p className="text-sm font-medium break-words">{value || <span className="text-muted-foreground/50 italic">No registrado</span>}</p>
             <span className="text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0"><Check size={12} className="opacity-0 group-hover:opacity-0" /><span className="text-[10px]">✎</span></span>
           </button>
@@ -127,26 +122,22 @@ function Field({
 /* ─── Nombre editable grande (bloque avatar) ────────────────────────── */
 function NameField({ nombre, userId }: { nombre: string; userId: string }) {
   const qc = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(nombre);
-  const [saving, setSaving] = useState(false);
-
-  async function save() {
-    const trimmed = draft.trim();
-    if (!trimmed || trimmed === nombre) { setEditing(false); return; }
-    setSaving(true);
-    try {
-      await api.patch(`/users/${userId}`, { nombreCompleto: trimmed });
-      qc.invalidateQueries({ queryKey: ['user-ficha', userId] });
-      qc.invalidateQueries({ queryKey: ['admin-users'] });
-      toast.success('Nombre actualizado');
-      setEditing(false);
-    } catch {
-      toast.error('No se pudo guardar');
-    } finally {
-      setSaving(false);
-    }
-  }
+  const { editing, draft, setDraft, saving, start, cancel, save } = useInlineEdit({
+    value: nombre,
+    normalize: (v) => v.trim(),
+    isUnchanged: (d, v) => !d || d === v,
+    onSave: async (v) => {
+      try {
+        await api.patch(`/users/${userId}`, { nombreCompleto: v });
+        qc.invalidateQueries({ queryKey: ['user-ficha', userId] });
+        qc.invalidateQueries({ queryKey: ['admin-users'] });
+        toast.success('Nombre actualizado');
+      } catch (e) {
+        toast.error('No se pudo guardar');
+        throw e;
+      }
+    },
+  });
 
   if (editing) {
     return (
@@ -155,14 +146,14 @@ function NameField({ nombre, userId }: { nombre: string; userId: string }) {
           autoFocus
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setDraft(nombre); setEditing(false); } }}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel(); }}
           maxLength={120}
           className="h-8 px-2 rounded-lg bg-background border border-primary text-sm font-bold outline-none w-36"
         />
         <button onClick={save} disabled={saving} className="size-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center hover:bg-primary/25 shrink-0">
           {saving ? <span className="size-3 rounded-full border-2 border-current border-t-transparent animate-spin" /> : <Check size={12} />}
         </button>
-        <button onClick={() => { setDraft(nombre); setEditing(false); }} className="size-7 rounded-lg border border-border flex items-center justify-center text-muted-foreground shrink-0">
+        <button onClick={cancel} className="size-7 rounded-lg border border-border flex items-center justify-center text-muted-foreground shrink-0">
           <ChevronLeft size={12} />
         </button>
       </div>
@@ -170,7 +161,7 @@ function NameField({ nombre, userId }: { nombre: string; userId: string }) {
   }
 
   return (
-    <button onClick={() => { setDraft(nombre); setEditing(true); }} className="flex items-center gap-1.5 text-left">
+    <button onClick={start} className="flex items-center gap-1.5 text-left">
       <span className="font-bold text-lg leading-tight">{nombre}</span>
       <span className="text-primary/50 text-[11px]">✎</span>
     </button>
@@ -339,55 +330,16 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
   const qc = useQueryClient();
   const me = useAuth((s) => s.user);
   const isSuperAdmin = me?.rol === 'super_admin';
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['user-ficha', userId],
     queryFn: () => api.get<{ user: ProfileUser; planActivo: PlanActivo | null }>(`/users/${userId}/ficha`),
   });
 
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingAvatar(true);
-    try {
-      const url = await uploadAvatar(file);
-      await api.patch(`/users/${userId}`, { avatarUrl: url });
-      refetch();
-      qc.invalidateQueries({ queryKey: ['admin-users'] });
-      toast.success('Foto actualizada');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'No se pudo subir la foto');
-    } finally {
-      setUploadingAvatar(false);
-    }
-  }
-
-  async function handleRemoveAvatar() {
-    const result = await Swal.fire({
-      title: 'Eliminar foto',
-      text: '¿Quitar la foto de perfil de este usuario?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Sí, quitar',
-      cancelButtonText: 'Cancelar',
-      background: '#0f0f11',
-      color: '#f8f8f8',
-      confirmButtonColor: '#ef4444',
-      cancelButtonColor: '#2a2a2f',
-      customClass: { popup: 'rounded-2xl border border-white/10', confirmButton: 'rounded-xl font-semibold', cancelButton: 'rounded-xl font-semibold' },
-      reverseButtons: true,
-    });
-    if (!result.isConfirmed) return;
-    try {
-      await api.patch(`/users/${userId}`, { avatarUrl: '' });
-      refetch();
-      qc.invalidateQueries({ queryKey: ['admin-users'] });
-      toast.success('Foto eliminada');
-    } catch {
-      toast.error('No se pudo eliminar la foto');
-    }
-  }
+  const { uploading: uploadingAvatar, upload, remove } = useAvatarUpload({
+    patchPath: `/users/${userId}`,
+    onDone: () => { refetch(); qc.invalidateQueries({ queryKey: ['admin-users'] }); },
+  });
 
   const { data: scoringData } = useQuery({
     queryKey: ['user-scoring', userId],
@@ -512,11 +464,11 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
                       : <Camera size={18} className="text-white" />
                     }
                   </div>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} disabled={uploadingAvatar} />
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} disabled={uploadingAvatar} />
                 </label>
                 {u.avatarUrl && (
                   <button
-                    onClick={handleRemoveAvatar}
+                    onClick={remove}
                     className="absolute -bottom-1 -right-1 size-5 rounded-full bg-red-500 flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors"
                     title="Eliminar foto"
                   >

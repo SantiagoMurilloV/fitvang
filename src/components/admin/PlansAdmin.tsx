@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { Pencil, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useUiAction } from '@/lib/ui-actions';
 import { Card, StatCard } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
+import { formatCop } from '@/lib/utils';
 import Swal from 'sweetalert2';
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
@@ -31,9 +33,7 @@ interface PlanType {
 }
 
 /* ─── Helpers ────────────────────────────────────────────────────────── */
-function formatCop(n: number) {
-  return n.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
-}
+// formatCop ahora vive en @/lib/utils (antes redefinido localmente)
 
 const MODALIDAD_STYLES: Record<PlanType['modalidad'], string> = {
   individual: 'bg-primary/10 text-primary border-primary/30',
@@ -252,11 +252,7 @@ export function PlansAdmin() {
   const [showForm, setShowForm] = useState(false);
   const [editPlan, setEditPlan] = useState<PlanType | null>(null);
 
-  useEffect(() => {
-    const handler = () => { setEditPlan(null); setShowForm(true); };
-    window.addEventListener('fitvang:crear-plan', handler);
-    return () => window.removeEventListener('fitvang:crear-plan', handler);
-  }, []);
+  useUiAction('crear-plan', () => { setEditPlan(null); setShowForm(true); });
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['plan-types'],

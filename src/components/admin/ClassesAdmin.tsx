@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -7,6 +7,7 @@ import { es } from 'date-fns/locale';
 import { X, Users2, ChevronLeft, ChevronRight, Clock, Pencil, Trash2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { api } from '@/lib/api';
+import { useUiAction } from '@/lib/ui-actions';
 import { Card } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
 
@@ -416,11 +417,7 @@ function WeeklyCalendar() {
 
 /* ─── Main Component ─────────────────────────────────────────────────── */
 export function ClassesAdmin() {
-  useEffect(() => {
-    const handler = () => { window.location.href = '/admin/programacion'; };
-    window.addEventListener('fitvang:ir-programacion', handler);
-    return () => window.removeEventListener('fitvang:ir-programacion', handler);
-  }, []);
+  useUiAction('ir-programacion', () => { window.location.href = '/admin/programacion'; });
 
   return (
     <div className="space-y-6">

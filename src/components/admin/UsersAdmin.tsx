@@ -4,7 +4,9 @@ import { AnimatePresence, motion } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { Search, Shield, Users2, Baby, UserCheck, HeartHandshake, ChevronRight, X, Bell, Layers, Zap, SlidersHorizontal, Save } from 'lucide-react';
+import Swal from 'sweetalert2';
 import { api } from '@/lib/api';
+import { useUiAction } from '@/lib/ui-actions';
 import { Card } from '@/components/shared/Card';
 import { UserDetail, CreateUserScreen } from './UserDetail';
 
@@ -375,16 +377,8 @@ export function UsersAdmin() {
     super_admin: allUsers.filter((u) => u.rol === 'super_admin').length,
   };
 
-  useEffect(() => {
-    const handler = () => setShowCreate(true);
-    const handlerPermisos = () => setShowPermisos(true);
-    window.addEventListener('fitvang:crear-usuario', handler);
-    window.addEventListener('fitvang:abrir-permisos', handlerPermisos);
-    return () => {
-      window.removeEventListener('fitvang:crear-usuario', handler);
-      window.removeEventListener('fitvang:abrir-permisos', handlerPermisos);
-    };
-  }, []);
+  useUiAction('crear-usuario', () => setShowCreate(true));
+  useUiAction('abrir-permisos', () => setShowPermisos(true));
 
   return (
     <div className="space-y-5">
@@ -452,8 +446,30 @@ export function UsersAdmin() {
             onSuccess={(pwd) => {
               setShowCreate(false);
               qc.invalidateQueries({ queryKey: ['admin-users'] });
-              if (pwd) toast.success(`Usuario creado. Contraseña: ${pwd}`, { duration: 15000 });
-              else toast.success('Usuario creado');
+              if (pwd) {
+                // Modal explícito con copiar (antes: contraseña en claro en un toast 15s)
+                Swal.fire({
+                  title: 'Usuario creado ✓',
+                  html: `<p style="margin-bottom:10px">Comparte esta contraseña temporal con el usuario:</p>
+                         <div style="display:flex;gap:8px;align-items:center;justify-content:center">
+                           <code style="font-size:20px;font-weight:700;letter-spacing:1px">${pwd}</code>
+                           <button id="fv-copy-pwd" type="button" style="cursor:pointer;border:1px solid #3DC4DB;background:transparent;color:#3DC4DB;border-radius:6px;padding:4px 10px;font-size:13px">Copiar</button>
+                         </div>`,
+                  background: '#0f0f11',
+                  color: '#f8f8f8',
+                  confirmButtonText: 'Listo',
+                  confirmButtonColor: '#3DC4DB',
+                  didOpen: () => {
+                    document.getElementById('fv-copy-pwd')?.addEventListener('click', () => {
+                      navigator.clipboard?.writeText(pwd);
+                      const b = document.getElementById('fv-copy-pwd');
+                      if (b) b.textContent = 'Copiado ✓';
+                    });
+                  },
+                });
+              } else {
+                toast.success('Usuario creado');
+              }
             }}
           />
         )}

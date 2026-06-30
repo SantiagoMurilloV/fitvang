@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { queryClient } from '@/lib/query';
 import { registerPush } from '@/lib/push';
 import { useAuth, type SessionUser } from '@/lib/auth-store';
+import { useUiActions, type UiAction } from '@/lib/ui-actions';
 import { api } from '@/lib/api';
 import { NotificationBell } from './NotificationBell';
 import { PushPromptModal } from './PushPromptModal';
@@ -161,7 +162,7 @@ async function handleLogout() {
 // ── Configuración del header por ruta ──────────────────────────────────
 interface HeaderAction {
   label: string;
-  event: string;
+  action: UiAction;
   icon?: 'plus' | 'settings';
 }
 interface HeaderConfig {
@@ -181,23 +182,23 @@ function getHeaderConfig(variant: string): HeaderConfig {
     if (path.startsWith('/admin/usuarios')) return {
       title: 'Usuarios',
       actions: [
-        { label: 'Permisos', event: 'fitvang:abrir-permisos', icon: 'settings' as const },
-        { label: 'Nuevo', event: 'fitvang:crear-usuario', icon: 'plus' as const },
+        { label: 'Permisos', action: 'abrir-permisos', icon: 'settings' as const },
+        { label: 'Nuevo', action: 'crear-usuario', icon: 'plus' as const },
       ],
     };
     if (path.startsWith('/admin/clases')) return {
       title: 'Clases',
-      action: { label: 'Mis clases', event: 'fitvang:ir-programacion' },
+      action: { label: 'Mis clases', action: 'ir-programacion' },
     };
     if (path.startsWith('/admin/programacion')) return {
       title: 'Mis clases',
       back: '/admin/clases',
-      action: { label: 'Nueva clase', event: 'fitvang:crear-clase' },
+      action: { label: 'Nueva clase', action: 'crear-clase' },
     };
     if (path.startsWith('/admin/pagos')) return { title: 'Pagos' };
     if (path.startsWith('/admin/planes')) return {
       title: 'Planes',
-      action: { label: 'Nuevo', event: 'fitvang:crear-plan' },
+      action: { label: 'Nuevo', action: 'crear-plan' },
     };
     if (path.startsWith('/admin/configuracion')) return { title: 'Configuración' };
   }
@@ -227,6 +228,7 @@ function getHeaderConfig(variant: string): HeaderConfig {
 
 function Shell({ user, variant, children }: Props) {
   const setUser = useAuth((s) => s.setUser);
+  const fire = useUiActions((s) => s.fire);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const { show: showIosBanner, dismiss: dismissIosBanner } = useIosInstallBanner();
   const header = getHeaderConfig(variant);
@@ -271,8 +273,8 @@ function Shell({ user, variant, children }: Props) {
         <div className="flex items-center gap-2">
           {(header.actions ?? (header.action ? [header.action] : [])).map((a) => (
             <button
-              key={a.event}
-              onClick={() => window.dispatchEvent(new CustomEvent(a.event))}
+              key={a.action}
+              onClick={() => fire(a.action)}
               className="flex items-center gap-1 px-3 h-8 rounded-full bg-primary/10 border border-primary/30 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
             >
               {a.icon !== 'settings' && <Plus size={13} />}
