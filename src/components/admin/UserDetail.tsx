@@ -33,6 +33,7 @@ interface ProfileUser {
   alturaCm?: number | null;
   bio?: string | null;
   createdAt: string;
+  passwordPlain?: string | null;
 }
 
 interface PlanActivo {
@@ -169,20 +170,28 @@ function NameField({ nombre, userId }: { nombre: string; userId: string }) {
 }
 
 /* ─── Campo contraseña inline ───────────────────────────────────────── */
-function PasswordField({ userId, hasPassword }: { userId: string; hasPassword?: boolean }) {
+function PasswordField({ userId, value }: { userId: string; hasPassword?: boolean; value?: string | null }) {
+  const qc = useQueryClient();
+  const [current, setCurrent] = useState<string | null | undefined>(value);
   const [pwd, setPwd] = useState('');
-  const [show, setShow] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  function refresh() {
+    qc.invalidateQueries({ queryKey: ['user-ficha', userId] });
+    qc.invalidateQueries({ queryKey: ['admin-users'] });
+  }
 
   async function save() {
     if (pwd.length < 6) { toast.error('Mínimo 6 caracteres'); return; }
     setSaving(true);
     try {
       await api.patch(`/users/${userId}`, { password: pwd });
+      setCurrent(pwd);
+      setPwd('');
       toast.success('Contraseña actualizada');
-      setSaved(true);
-      setShow(true);
+      refresh();
     } catch {
       toast.error('No se pudo cambiar la contraseña');
     } finally {
@@ -190,30 +199,60 @@ function PasswordField({ userId, hasPassword }: { userId: string; hasPassword?: 
     }
   }
 
+  async function reset() {
+    setResetting(true);
+    try {
+      const { password } = await api.post<{ password: string }>(`/users/${userId}/reset-password`);
+      setCurrent(password);
+      toast.success('Contraseña restablecida');
+      refresh();
+    } catch {
+      toast.error('No se pudo restablecer la contraseña');
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  function copy() {
+    if (!current) return;
+    navigator.clipboard?.writeText(current);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
   return (
     <div className="rounded-2xl bg-card border border-border p-4 space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contraseña</p>
-        {(hasPassword || saved) && !pwd && <span className="text-[10px] text-green-400">Asignada ✓</span>}
+        <button type="button" onClick={reset} disabled={resetting} className="text-[11px] text-amber-400 hover:underline disabled:opacity-50">
+          {resetting ? 'Restableciendo…' : 'Restablecer'}
+        </button>
       </div>
+
+      {/* Contraseña actual (visible) */}
+      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-background border border-border">
+        <Lock size={14} className="text-muted-foreground shrink-0" />
+        {current ? (
+          <>
+            <code className="text-sm font-mono break-all flex-1">{current}</code>
+            <button type="button" onClick={copy} className="text-[11px] text-primary hover:underline shrink-0">
+              {copied ? 'Copiado ✓' : 'Copiar'}
+            </button>
+          </>
+        ) : (
+          <span className="text-sm text-muted-foreground/60 italic flex-1">No disponible — usa "Restablecer" o asigna una abajo</span>
+        )}
+      </div>
+
+      {/* Asignar una contraseña específica */}
       <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type={show ? 'text' : 'password'}
-            value={pwd}
-            onChange={(e) => setPwd(e.target.value)}
-            placeholder={(hasPassword || saved) ? '••••••••  (cambiar)' : 'Nueva contraseña…'}
-            className="w-full h-10 pl-9 pr-10 rounded-xl bg-background border border-border text-sm outline-none focus:border-primary transition"
-          />
-          <button
-            type="button"
-            onClick={() => setShow((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {show ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-        </div>
+        <input
+          type="text"
+          value={pwd}
+          onChange={(e) => setPwd(e.target.value)}
+          placeholder="Asignar contraseña específica…"
+          className="flex-1 h-10 px-3 rounded-xl bg-background border border-border text-sm outline-none focus:border-primary transition"
+        />
         <button
           onClick={save}
           disabled={saving || pwd.length < 1}
@@ -575,8 +614,8 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
               </div>
             )}
 
-            {/* Contraseña */}
-            <PasswordField userId={userId} hasPassword />
+            {/* Contraseña — solo super_admin */}
+            {isSuperAdmin && <PasswordField userId={userId} value={u.passwordPlain} />}
           </div>
         )}
       </div>
