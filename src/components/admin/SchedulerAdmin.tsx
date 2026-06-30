@@ -587,10 +587,11 @@ export function SchedulerAdmin() {
     queryFn: () => api.get<{ planTypes: PlanType[] }>('/plans/types'),
   });
 
-  // Filtra por coachId=me para mostrar solo las clases del usuario logueado
+  // Admin: mostrar TODAS las plantillas (antes filtraba ?coachId=me, pero como
+  // las clases no tienen coach asignado el admin no veía ninguna en "Mis clases").
   const { data: templatesData, refetch } = useQuery({
-    queryKey: ['class-templates', user?.id],
-    queryFn: () => api.get<{ templates: Template[] }>('/classes/templates?coachId=me'),
+    queryKey: ['class-templates'],
+    queryFn: () => api.get<{ templates: Template[] }>('/classes/templates'),
   });
 
   const deleteTemplateMutation = useMutation({
