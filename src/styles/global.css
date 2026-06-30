@@ -36,3 +36,12 @@ html, body {
 * {
   border-color: var(--color-border);
 }
+
+/* Toasts (sonner): aparecen bien por debajo del notch Y del header de la app
+   (en la PWA con viewport-fit=cover). +72px ≈ debajo de la barra superior. */
+[data-sonner-toaster][data-y-position="top"] {
+  top: calc(env(safe-area-inset-top, 0px) + 72px) !important;
+}
+[data-sonner-toaster][data-y-position="bottom"] {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
+}

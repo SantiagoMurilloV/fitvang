@@ -166,7 +166,7 @@ async function handleLogout() {
 interface HeaderAction {
   label: string;
   action: UiAction;
-  icon?: 'plus' | 'settings';
+  icon?: 'plus' | 'settings' | 'calendar';
 }
 interface HeaderConfig {
   title: string;
@@ -209,7 +209,7 @@ function getHeaderConfig(variant: string): HeaderConfig {
   // Rutas app usuario
   if (variant === 'app') {
     if (path === '/app') return { title: '' };
-    if (path.startsWith('/app/horarios')) return { title: 'Horarios' };
+    if (path.startsWith('/app/horarios')) return { title: 'Horarios', action: { label: 'Mis reservas', action: 'editar-reservas', icon: 'calendar' } };
     if (path.startsWith('/app/asistencias')) return { title: 'Scoring' };
     if (path.startsWith('/app/pagos')) return { title: 'Pagos' };
     if (path.startsWith('/app/perfil')) return { title: 'Perfil' };
@@ -293,7 +293,7 @@ function Shell({ user, variant, children }: Props) {
               onClick={() => fire(a.action)}
               className="flex items-center gap-1 px-3 h-8 rounded-full bg-primary/10 border border-primary/30 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
             >
-              {a.icon !== 'settings' && <Plus size={13} />}
+              {a.icon === 'calendar' ? <Calendar size={13} /> : a.icon !== 'settings' ? <Plus size={13} /> : null}
               {a.label}
             </button>
           ))}
@@ -330,7 +330,12 @@ export function AppPage({ user, variant, children }: Props) {
       <Shell user={user} variant={variant}>
         {children}
       </Shell>
-      <Toaster position="top-center" richColors />
+      <Toaster
+        position="top-center"
+        richColors
+        closeButton
+        toastOptions={{ duration: 4500 }}
+      />
     </QueryClientProvider>
   );
 }

@@ -11,7 +11,8 @@ export type UiAction =
   | 'abrir-permisos'
   | 'crear-plan'
   | 'crear-clase'
-  | 'ir-programacion';
+  | 'ir-programacion'
+  | 'editar-reservas';
 
 interface UiActionState {
   // `nonce` se incrementa en cada disparo para que listeners reaccionen incluso a repeticiones

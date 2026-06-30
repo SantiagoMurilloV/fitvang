@@ -4,9 +4,11 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { addDays, format, startOfWeek } from 'date-fns';
-import { ChevronLeft, ChevronRight, Check, X, Clock, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, X, Clock, Users, Pencil, Trash2, CalendarClock } from 'lucide-react';
+import Swal from 'sweetalert2';
 import { api, ApiError } from '@/lib/api';
 import { Button } from '@/components/shared/Button';
+import { useUiAction } from '@/lib/ui-actions';
 import { cn } from '@/lib/utils';
 
 interface SessionRow {
@@ -20,6 +22,19 @@ interface SessionRow {
   capacidadMax: number;
   ocupados: number;
   estado: string;
+}
+
+interface BookingRow {
+  bookingId: string;
+  estado: string;
+  sessionId: string;
+  fecha: string;
+  sessionEstado: string;
+  horaInicio: string;
+  horaFin: string;
+  nombre: string;
+  trainingSlug: string;
+  trainingColor: string;
 }
 
 type FilterKey = 'todos' | 'funcional' | 'futbol' | 'kids';
@@ -60,6 +75,8 @@ export function SchedulePicker() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [filter, setFilter] = useState<FilterKey>('todos');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mode, setMode] = useState<'clases' | 'reservas'>('clases');
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayColRef = useRef<HTMLDivElement>(null);
 
@@ -75,8 +92,7 @@ export function SchedulePicker() {
 
   const myBookings = useQuery({
     queryKey: ['bookings-me'],
-    queryFn: () =>
-      api.get<{ bookings: Array<{ sessionId: string; estado: string }> }>('/bookings/me'),
+    queryFn: () => api.get<{ bookings: BookingRow[] }>('/bookings/me'),
   });
 
   const reservedSet = new Set(
@@ -94,18 +110,85 @@ export function SchedulePicker() {
       setSelectedId(null);
     },
     onError: (err) => {
+      const map: Record<string, string> = {
+        sin_plan_activo: 'No tienes plan activo.',
+        plan_no_cubre_training: 'Tu plan no cubre este tipo de clase.',
+        kids_solo_por_admin: 'Las clases Kids se inscriben con el admin.',
+        ya_reservada: 'Ya tienes esta clase reservada.',
+        sesion_no_disponible: 'Esta sesión ya no está disponible.',
+        sesion_no_encontrada: 'Esta sesión ya no existe.',
+        muy_tarde_para_reservar: 'Ya es muy tarde: reserva con al menos 30 min de anticipación.',
+        horario_restringido: 'No puedes reservar entre las 11 PM y las 6 AM.',
+        plan_sin_sesiones: 'Tu plan no tiene sesiones disponibles.',
+      };
       if (err instanceof ApiError) {
-        const map: Record<string, string> = {
-          sin_plan_activo: 'No tienes plan activo.',
-          plan_no_cubre_training: 'Tu plan no cubre este tipo de clase.',
-          kids_solo_por_admin: 'Las clases Kids se inscriben con el admin.',
-          ya_reservada: 'Ya tienes esta clase reservada.',
-          sesion_no_disponible: 'Esta sesión ya no está disponible.',
-        };
-        toast.error(map[err.data?.error] ?? 'No se pudo reservar.');
+        toast.error(map[err.data?.error] ?? err.data?.message ?? 'No se pudo reservar.');
+      } else {
+        toast.error('No se pudo reservar.');
       }
     },
   });
+
+  const cancelBooking = useMutation({
+    mutationFn: (bookingId: string) => api.delete(`/bookings/${bookingId}`),
+    onSuccess: () => {
+      toast.success('Reserva cancelada');
+      qc.invalidateQueries({ queryKey: ['bookings-me'] });
+      qc.invalidateQueries({ queryKey: ['sessions'] });
+    },
+    onError: () => toast.error('No se pudo cancelar la reserva.'),
+  });
+
+  const reschedule = useMutation({
+    mutationFn: (vars: { bookingId: string; newSessionId: string }) =>
+      api.put(`/bookings/${vars.bookingId}`, { newSessionId: vars.newSessionId }),
+    onSuccess: () => {
+      toast.success('Reserva reagendada');
+      qc.invalidateQueries({ queryKey: ['bookings-me'] });
+      qc.invalidateQueries({ queryKey: ['sessions'] });
+      setReschedulingId(null);
+      setSelectedId(null);
+      setMode('reservas');
+    },
+    onError: (err) => {
+      const map: Record<string, string> = {
+        sin_plan_activo: 'No tienes plan activo.',
+        plan_no_cubre_training: 'Tu plan no cubre este tipo de clase.',
+        ya_reservada: 'Ya tienes esa clase reservada.',
+        sesion_llena: 'La clase elegida está llena.',
+        misma_sesion: 'Es la misma clase de tu reserva.',
+        muy_tarde_para_editar: 'Solo puedes reagendar con al menos 1 hora de anticipación.',
+        muy_tarde_para_reservar: 'La nueva clase debe ser con al menos 30 min de anticipación.',
+        sesion_no_disponible: 'Esa clase ya no está disponible.',
+      };
+      if (err instanceof ApiError) toast.error(map[err.data?.error] ?? err.data?.message ?? 'No se pudo reagendar.');
+      else toast.error('No se pudo reagendar.');
+    },
+  });
+
+  // Botón del header "Mis reservas" → alterna entre la cuadrícula y mis reservas
+  useUiAction('editar-reservas', () => {
+    setReschedulingId(null);
+    setSelectedId(null);
+    setMode((m) => (m === 'clases' ? 'reservas' : 'clases'));
+  });
+
+  async function confirmCancel(b: BookingRow) {
+    const res = await Swal.fire({
+      title: '¿Cancelar reserva?',
+      text: `${b.nombre.split('·')[0].trim()} · ${dateLong(b.fecha)} ${b.horaInicio.slice(0, 5)}`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, cancelar',
+      cancelButtonText: 'No',
+      background: '#0f0f11',
+      color: '#f8f8f8',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#2a2a2f',
+      reverseButtons: true,
+    });
+    if (res.isConfirmed) cancelBooking.mutate(b.bookingId);
+  }
 
   const allSessions = sessions.data?.sessions ?? [];
   const filtered = allSessions.filter((s) => matchesFilter(s, filter));
@@ -141,6 +224,25 @@ export function SchedulePicker() {
 
   return (
     <div className="space-y-4">
+      {mode === 'reservas' && !reschedulingId ? (
+        <ReservasList
+          loading={myBookings.isLoading}
+          bookings={(myBookings.data?.bookings ?? []).filter((b) => b.estado === 'activa')}
+          onEdit={(b) => setReschedulingId(b.bookingId)}
+          onDelete={confirmCancel}
+          deleting={cancelBooking.isPending}
+        />
+      ) : (
+      <>
+      {reschedulingId && (
+        <div className="flex items-center gap-2 rounded-xl bg-primary/10 border border-primary/30 px-3 py-2">
+          <CalendarClock className="size-4 text-primary shrink-0" />
+          <p className="text-xs text-primary flex-1">Elige la nueva clase para reagendar tu reserva.</p>
+          <button onClick={() => setReschedulingId(null)} className="text-xs font-semibold text-muted-foreground hover:text-foreground">
+            Cancelar
+          </button>
+        </div>
+      )}
       {/* Header con navegación de semana */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
@@ -305,18 +407,93 @@ export function SchedulePicker() {
 
       {!sessions.isLoading && times.length > 0 && (
         <p className="text-center text-[11px] text-muted-foreground">
-          Toca una clase para ver el detalle y reservar.
+          {reschedulingId
+            ? 'Toca la clase a la que quieres mover tu reserva.'
+            : 'Toca una clase para ver el detalle y reservar.'}
         </p>
+      )}
+      </>
       )}
 
       {/* Hoja de detalle / reserva */}
       <DetailSheet
         session={selected}
         reserved={selected ? reservedSet.has(selected.id) : false}
-        reserving={reserve.isPending}
+        rescheduling={!!reschedulingId}
+        reserving={reserve.isPending || reschedule.isPending}
         onReserve={(id) => reserve.mutate(id)}
+        onReschedule={(newSessionId) => {
+          if (reschedulingId) reschedule.mutate({ bookingId: reschedulingId, newSessionId });
+        }}
         onClose={() => setSelectedId(null)}
       />
+    </div>
+  );
+}
+
+function ReservasList({
+  loading,
+  bookings,
+  onEdit,
+  onDelete,
+  deleting,
+}: {
+  loading: boolean;
+  bookings: BookingRow[];
+  onEdit: (b: BookingRow) => void;
+  onDelete: (b: BookingRow) => void;
+  deleting: boolean;
+}) {
+  if (loading) {
+    return <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-20 rounded-2xl bg-card animate-pulse" />)}</div>;
+  }
+  if (bookings.length === 0) {
+    return <p className="text-center text-muted-foreground py-12 text-sm">No tienes reservas próximas.</p>;
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Reagenda o cancela tus reservas — solo hasta 1 hora antes de la clase.
+      </p>
+      {bookings.map((b) => {
+        const startMs = new Date(`${b.fecha}T${b.horaInicio}`).getTime();
+        const editable = startMs - Date.now() >= 3600_000;
+        return (
+          <div key={b.bookingId} className="rounded-2xl bg-card border border-border overflow-hidden flex">
+            <div className="w-1 shrink-0" style={{ background: b.trainingColor }} />
+            <div className="flex-1 p-4 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm truncate">{b.nombre.split('·')[0].trim()}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 capitalize">{dateLong(b.fecha)}</p>
+                <p className="text-xs text-muted-foreground">{b.horaInicio.slice(0, 5)} – {b.horaFin.slice(0, 5)}</p>
+              </div>
+              {editable ? (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => onEdit(b)}
+                    title="Reagendar"
+                    className="size-9 rounded-full bg-primary/10 text-primary border border-primary/20 grid place-items-center hover:bg-primary/20 transition-colors"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                  <button
+                    onClick={() => onDelete(b)}
+                    disabled={deleting}
+                    title="Cancelar reserva"
+                    className="size-9 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 grid place-items-center hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              ) : (
+                <span className="text-[10px] text-muted-foreground shrink-0 text-right leading-tight max-w-[72px]">
+                  Empieza pronto
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -325,13 +502,17 @@ function DetailSheet({
   session,
   reserved,
   reserving,
+  rescheduling,
   onReserve,
+  onReschedule,
   onClose,
 }: {
   session: SessionRow | null;
   reserved: boolean;
   reserving: boolean;
+  rescheduling: boolean;
   onReserve: (id: string) => void;
+  onReschedule: (newSessionId: string) => void;
   onClose: () => void;
 }) {
   if (typeof document === 'undefined') return null;
@@ -339,6 +520,10 @@ function DetailSheet({
   const libres = session ? session.capacidadMax - session.ocupados : 0;
   const full = libres <= 0;
   const pct = session ? Math.min(100, (session.ocupados / session.capacidadMax) * 100) : 0;
+  // Mismas reglas que el backend: no se reserva una clase pasada ni a <30 min.
+  const startMs = session ? new Date(`${session.fecha}T${session.horaInicio}`).getTime() : 0;
+  const started = startMs <= Date.now();
+  const cerrada = startMs - Date.now() < 30 * 60 * 1000;
 
   return createPortal(
     <AnimatePresence>
@@ -411,6 +596,20 @@ function DetailSheet({
                   <Check className="size-4" />
                   Ya reservada
                 </div>
+              ) : cerrada ? (
+                <div className="flex items-center justify-center w-full h-12 rounded-full bg-white/5 text-muted-foreground border border-border font-semibold">
+                  {started ? 'Clase finalizada' : 'Reservas cerradas'}
+                </div>
+              ) : rescheduling ? (
+                full ? (
+                  <div className="flex items-center justify-center w-full h-12 rounded-full bg-white/5 text-muted-foreground border border-border font-semibold">
+                    Clase llena
+                  </div>
+                ) : (
+                  <Button size="lg" className="w-full" loading={reserving} onClick={() => onReschedule(session.id)}>
+                    Reagendar aquí
+                  </Button>
+                )
               ) : full ? (
                 <Button
                   size="lg"
