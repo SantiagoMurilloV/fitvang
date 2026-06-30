@@ -11,6 +11,7 @@ function urlBase64ToUint8Array(base64: string) {
 
 export async function registerPush(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
+  if (import.meta.env.DEV) return false; // sin SW/push en desarrollo (rompe el HMR)
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
   const reg = await navigator.serviceWorker.register('/sw.js');
   let permission = Notification.permission;

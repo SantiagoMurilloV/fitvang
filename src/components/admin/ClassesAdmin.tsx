@@ -282,15 +282,6 @@ function WeeklyCalendar() {
     refetchInterval: 60_000,
   });
 
-  const generate = useMutation({
-    mutationFn: () => api.post<{ inserted: number }>('/classes/generate?days=30'),
-    onSuccess: (d) => {
-      toast.success(`${d.inserted} sesiones generadas.`);
-      qc.invalidateQueries({ queryKey: ['sessions-week'] });
-    },
-    onError: () => toast.error('Error al generar sesiones.'),
-  });
-
   // Agrupar sesiones por día
   const byDay = DIAS_ORDER.reduce<Record<string, Session[]>>((acc, d) => { acc[d] = []; return acc; }, {});
   for (const s of (data?.sessions ?? [])) {
@@ -374,8 +365,6 @@ function WeeklyCalendar() {
             {allHours.length === 0 ? (
               <div className="text-center py-12 text-sm text-muted-foreground">
                 No hay sesiones esta semana.
-                <br />
-                <button onClick={() => generate.mutate()} className="text-primary hover:underline mt-1">Generar sesiones</button>
               </div>
             ) : (
               allHours.map((hour) => (

@@ -47,13 +47,39 @@ const { title = "Fitvang" } = Astro.props;
 
     <slot />
 
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
-        });
-      }
+    {import.meta.env.PROD && (
+      <script is:inline set:html={`
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', function () {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+          });
+        }
+      `} />
+    )}
 
+    {import.meta.env.DEV && (
+      <script is:inline set:html={`
+        // En dev NO usamos el service worker: cachea módulos de Vite y rompe el HMR
+        // (pantalla en negro al cambiar código). Lo desregistramos y limpiamos caché.
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            var had = regs.length > 0;
+            Promise.all(regs.map(function (r) { return r.unregister(); })).then(function () {
+              if (window.caches && caches.keys) {
+                return caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); });
+              }
+            }).then(function () {
+              if (had && !sessionStorage.getItem('fv-sw-cleared')) {
+                sessionStorage.setItem('fv-sw-cleared', '1');
+                location.reload();
+              }
+            });
+          });
+        }
+      `} />
+    )}
+
+    <script>
       (function () {
         const body    = document.body;
         const bar     = document.getElementById('page-loader-bar') as HTMLElement;
