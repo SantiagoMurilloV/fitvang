@@ -174,8 +174,19 @@ function NameField({ nombre, userId }: { nombre: string; userId: string }) {
 }
 
 /* ─── Campo contraseña inline ───────────────────────────────────────── */
-function TerminosRow({ aceptadosAt, docUrl }: { aceptadosAt?: string | null; docUrl?: string | null }) {
+function TerminosRow({ userId, aceptadosAt, docUrl }: { userId: string; aceptadosAt?: string | null; docUrl?: string | null }) {
+  const qc = useQueryClient();
   const aceptados = !!aceptadosAt;
+
+  const regenerar = useMutation({
+    mutationFn: () => api.post<{ url: string }>(`/users/${userId}/regenerar-terminos`),
+    onSuccess: () => {
+      toast.success('Documento generado');
+      qc.invalidateQueries({ queryKey: ['user-ficha', userId] });
+    },
+    onError: () => toast.error('No se pudo generar el documento. Revisa las credenciales de Cloudinary.'),
+  });
+
   return (
     <div className="rounded-2xl bg-card border border-border p-4 space-y-3">
       <div className="flex items-center gap-2">
@@ -202,7 +213,18 @@ function TerminosRow({ aceptadosAt, docUrl }: { aceptadosAt?: string | null; doc
               Ver documento firmado
             </a>
           ) : (
-            <p className="text-xs text-muted-foreground">Aceptados, pero no se generó el documento.</p>
+            <>
+              <p className="text-xs text-muted-foreground">Aceptados, pero no se generó el documento.</p>
+              <button
+                type="button"
+                onClick={() => regenerar.mutate()}
+                disabled={regenerar.isPending}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-card border border-border text-sm font-semibold hover:bg-white/5 active:scale-[0.98] transition disabled:opacity-50"
+              >
+                {regenerar.isPending ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
+                Generar documento
+              </button>
+            </>
           )}
         </>
       ) : (
@@ -785,7 +807,7 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
             {isSuperAdmin && <PasswordField userId={userId} value={u.passwordPlain} />}
 
             {/* Términos y condiciones */}
-            {isSuperAdmin && u.rol === 'user' && <TerminosRow aceptadosAt={u.terminosAceptadosAt} docUrl={u.terminosDocUrl} />}
+            {isSuperAdmin && u.rol === 'user' && <TerminosRow userId={userId} aceptadosAt={u.terminosAceptadosAt} docUrl={u.terminosDocUrl} />}
           </div>
         )}
       </div>
