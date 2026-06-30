@@ -85,8 +85,8 @@ export default function LoginForm({ next }: { next?: string }) {
       const rol = data.user.rol;
       const esAcudiente = data.user.esAcudiente;
       const nextAllowed = next && (
-        rol === 'super_admin' ||
-        (rol === 'coach' && (next.startsWith('/coach') || next.startsWith('/admin'))) ||
+        (rol === 'super_admin' && next.startsWith('/admin')) ||
+        (rol === 'coach' && next.startsWith('/coach')) ||
         (esAcudiente && next.startsWith('/acudiente')) ||
         (rol === 'user' && !esAcudiente && next.startsWith('/app'))
       );

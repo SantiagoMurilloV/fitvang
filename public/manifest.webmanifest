@@ -2,7 +2,7 @@
   "name": "Fitvang",
   "short_name": "Fitvang",
   "description": "Club de entrenamiento funcional y fútbol funcional — Cali",
-  "start_url": "/app",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

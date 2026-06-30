@@ -19,18 +19,13 @@ function areaHome(user: MeUser): string {
   return '/app';
 }
 
-/** ¿El usuario puede ver esta área? Conservador para no provocar loops de redirect. */
-function areaAllowed(user: MeUser, area: Area): boolean {
-  switch (area) {
-    case 'admin':
-      return user.rol === 'super_admin';
-    case 'coach':
-      return user.rol === 'coach' || user.rol === 'super_admin';
-    case 'app':
-    case 'acudiente':
-      return true; // cualquier usuario autenticado
-  }
-}
+// Ruta home de cada área. Cada rol tiene exactamente UN área → sin loops.
+const AREA_PATH: Record<Area, string> = {
+  admin: '/admin',
+  coach: '/coach',
+  app: '/app',
+  acudiente: '/acudiente',
+};
 
 /**
  * Guard SSR para páginas protegidas. Devuelve una ruta de redirect si el usuario
@@ -54,5 +49,7 @@ export async function guardArea(request: Request, area: Area): Promise<string | 
     // API caída/lenta o sin sesión → al login (no colgamos el SSR por el timeout)
     return `/?next=${encodeURIComponent(url.pathname)}`;
   }
-  return areaAllowed(user, area) ? null : areaHome(user);
+  // El usuario solo puede estar en SU área; en cualquier otra se le manda a su home.
+  const home = areaHome(user);
+  return home === AREA_PATH[area] ? null : home;
 }
