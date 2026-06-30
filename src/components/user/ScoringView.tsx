@@ -2,15 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, parseISO } from 'date-fns';
+import { Sprout, Medal, Flame, Zap, Crown, Trophy } from 'lucide-react';
 import { api } from '@/lib/api';
-import { Card, StatCard } from '@/components/shared/Card';
+import { Card } from '@/components/shared/Card';
 
 const NIVELES = {
-  rookie: { label: '🌱 Rookie', min: 0 },
-  regular: { label: '🔵 Regular', min: 40 },
-  constante: { label: '🟡 Constante', min: 60 },
-  elite: { label: '🔴 Elite', min: 80 },
-  leyenda: { label: '🏆 Leyenda', min: 95 },
+  rookie: { label: 'Rookie', min: 0, Icon: Sprout, color: '#4ade80' },
+  regular: { label: 'Regular', min: 40, Icon: Medal, color: '#3DC4DB' },
+  constante: { label: 'Constante', min: 60, Icon: Flame, color: '#facc15' },
+  elite: { label: 'Elite', min: 80, Icon: Zap, color: '#f87171' },
+  leyenda: { label: 'Leyenda', min: 95, Icon: Crown, color: '#fbbf24' },
 };
 
 // ─── Confetti ────────────────────────────────────────────────────────────────
@@ -173,8 +174,6 @@ export function ScoringView() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold">Mi scoring</h1>
-
       {/* Ring card */}
       <Card className="text-center py-8 relative overflow-hidden">
         <AnimatePresence>{showConfetti && <Confetti />}</AnimatePresence>
@@ -193,7 +192,13 @@ export function ScoringView() {
           <div className="absolute inset-0 grid place-items-center">
             <div>
               <p className="text-4xl font-bold">{pct}%</p>
-              <p className="text-xs text-muted-foreground">{NIVELES[nivel].label}</p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                {(() => {
+                  const NivelIcon = NIVELES[nivel].Icon;
+                  return <NivelIcon className="size-3.5" style={{ color: NIVELES[nivel].color }} />;
+                })()}
+                {NIVELES[nivel].label}
+              </p>
             </div>
           </div>
         </div>
@@ -215,21 +220,29 @@ export function ScoringView() {
             initial={{ scale: 1.4, color: '#3DC4DB' }}
             animate={{ scale: 1, color: '#FFFFFF' }}
             transition={{ duration: 0.4 }}
-            className="text-3xl font-bold"
+            className="text-3xl font-bold flex items-center justify-center gap-1.5"
           >
-            {data?.rachaActual ?? 0}{(data?.rachaActual ?? 0) > 3 ? '🔥' : ''}
+            {data?.rachaActual ?? 0}
+            {(data?.rachaActual ?? 0) > 3 && <Flame className="size-6 text-orange-400" />}
           </motion.p>
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Racha actual</p>
           <p className="text-[9px] text-muted-foreground">días seguidos</p>
         </Card>
-        <StatCard label="Récord histórico" value={`${data?.rachaMaxima ?? 0}🏆`} hint="días seguidos" />
+        <Card className="flex flex-col items-center justify-center text-center">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Récord histórico</p>
+          <p className="mt-2 text-3xl font-bold flex items-center justify-center gap-1.5">
+            {data?.rachaMaxima ?? 0}
+            <Trophy className="size-6 text-amber-400" />
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">días seguidos</p>
+        </Card>
       </div>
 
       {/* Heatmap */}
       <Card className="overflow-x-auto">
-        {heatmapQ.data
-          ? <HeatmapGrid heatmap={heatmapQ.data.heatmap} />
-          : <div className="h-24 flex items-center justify-center"><div className="text-xs text-muted-foreground">Cargando historial…</div></div>
+        {heatmapQ.isLoading
+          ? <div className="h-24 flex items-center justify-center"><div className="text-xs text-muted-foreground">Cargando historial…</div></div>
+          : <HeatmapGrid heatmap={heatmapQ.data?.heatmap ?? {}} />
         }
       </Card>
 
@@ -237,16 +250,22 @@ export function ScoringView() {
       <Card>
         <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Niveles</p>
         <ul className="space-y-2 text-sm">
-          {(Object.entries(NIVELES) as Array<[keyof typeof NIVELES, { label: string; min: number }]>).map(
-            ([key, n]) => (
-              <li
-                key={key}
-                className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${key === nivel ? 'bg-primary/10 border border-primary/40' : ''}`}
-              >
-                <span>{n.label}</span>
-                <span className="text-muted-foreground text-xs">{n.min}%+</span>
-              </li>
-            ),
+          {(Object.entries(NIVELES) as Array<[keyof typeof NIVELES, (typeof NIVELES)[keyof typeof NIVELES]]>).map(
+            ([key, n]) => {
+              const Icon = n.Icon;
+              return (
+                <li
+                  key={key}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${key === nivel ? 'bg-primary/10 border border-primary/40' : ''}`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Icon className="size-4 shrink-0" style={{ color: n.color }} />
+                    {n.label}
+                  </span>
+                  <span className="text-muted-foreground text-xs">{n.min}%+</span>
+                </li>
+              );
+            },
           )}
         </ul>
       </Card>

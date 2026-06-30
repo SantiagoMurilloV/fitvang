@@ -42,7 +42,7 @@ const DIAS_SHORT: Record<string, string> = {
 };
 
 /* ─── Attendees Sheet ───────────────────────────────────────────────── */
-function AttendeesSheet({ session, onClose }: { session: Session; onClose: () => void }) {
+function AttendeesSheet({ session, onClose, onEdit, onDelete }: { session: Session; onClose: () => void; onEdit: () => void; onDelete: () => void }) {
   const { data, isLoading } = useQuery({
     queryKey: ['session-attendees', session.id],
     queryFn: () => api.get<{ attendees: Attendee[] }>(`/classes/sessions/${session.id}/attendees`),
@@ -57,12 +57,28 @@ function AttendeesSheet({ session, onClose }: { session: Session; onClose: () =>
         className="w-full max-w-md bg-card border-t md:border border-border md:rounded-2xl max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-5 border-b border-border shrink-0">
-          <div>
-            <p className="font-bold">{session.nombre}</p>
+        <div className="flex items-center justify-between gap-2 p-5 border-b border-border shrink-0">
+          <div className="min-w-0">
+            <p className="font-bold truncate">{session.nombre}</p>
             <p className="text-xs text-muted-foreground">{session.horaInicio} · {session.ocupados}/{session.capacidadMax} reservados</p>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={18} /></button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={onEdit}
+              className="size-9 rounded-full bg-blue-500/10 text-blue-400 grid place-items-center hover:bg-blue-500/20 transition-colors"
+              title="Editar clase"
+            >
+              <Pencil size={15} />
+            </button>
+            <button
+              onClick={onDelete}
+              className="size-9 rounded-full bg-red-500/10 text-red-400 grid place-items-center hover:bg-red-500/20 transition-colors"
+              title="Eliminar clase"
+            >
+              <Trash2 size={15} />
+            </button>
+            <button onClick={onClose} className="size-9 rounded-full bg-white/5 text-muted-foreground grid place-items-center hover:text-foreground transition-colors"><X size={18} /></button>
+          </div>
         </div>
         <div className="overflow-y-auto p-4 space-y-2 flex-1">
           {isLoading ? (
@@ -233,9 +249,9 @@ function SessionCell({ session, onViewAttendees, onEdit, onDelete }: {
     >
       {/* Contenido clickeable para ver reservados */}
       <button className="w-full text-left" onClick={onViewAttendees}>
-        <p className="text-[10px] font-semibold truncate leading-tight pr-8">{session.nombre}</p>
+        <p className="text-[10px] font-semibold truncate leading-tight">{session.nombre}</p>
         <p className="text-[9px] text-muted-foreground">{session.horaInicio.slice(0, 5)}</p>
-        <div className="flex items-center gap-1 mt-0.5">
+        <div className="flex items-center gap-1 mt-0.5 pr-9">
           <div className="flex-1 h-0.5 bg-white/10 rounded-full overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${pct * 100}%`, backgroundColor: isFull ? '#ef4444' : (session.trainingColor || '#3DC4DB') }} />
           </div>
@@ -243,19 +259,19 @@ function SessionCell({ session, onViewAttendees, onEdit, onDelete }: {
         </div>
       </button>
 
-      {/* Botones de acción — siempre visibles */}
-      <div className="absolute top-0.5 right-0.5 flex gap-0.5">
+      {/* Botones de acción — esquina inferior derecha */}
+      <div className="absolute bottom-0.5 right-0.5 flex gap-0.5">
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          className="size-5 rounded flex items-center justify-center bg-background/80 text-blue-400 active:bg-blue-500/20 transition-colors"
+          className="size-4 rounded flex items-center justify-center bg-background/80 text-blue-400 active:bg-blue-500/20 transition-colors"
         >
-          <Pencil size={9} />
+          <Pencil size={8} />
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="size-5 rounded flex items-center justify-center bg-background/80 text-red-400 active:bg-red-500/20 transition-colors"
+          className="size-4 rounded flex items-center justify-center bg-background/80 text-red-400 active:bg-red-500/20 transition-colors"
         >
-          <Trash2 size={9} />
+          <Trash2 size={8} />
         </button>
       </div>
     </div>
@@ -334,11 +350,11 @@ function WeeklyCalendar() {
       {isLoading ? (
         <div className="h-64 rounded-2xl bg-card animate-pulse" />
       ) : (
-        <div className="overflow-x-auto -mx-4 px-0 rounded-2xl border border-border bg-card">
-          {/* min-w: 48px hora + 7 cols × 130px = 958px */}
-          <div className="p-3" style={{ minWidth: '960px' }}>
+        <div className="overflow-x-auto -mx-4 px-0 rounded-lg border border-border bg-card">
+          {/* Llena el ancho disponible; en pantallas angostas hace scroll. */}
+          <div className="p-3" style={{ minWidth: '680px' }}>
             {/* Cabecera días */}
-            <div className="grid gap-1 mb-2" style={{ gridTemplateColumns: '48px repeat(7, minmax(128px, 1fr))' }}>
+            <div className="grid gap-1 mb-2" style={{ gridTemplateColumns: '40px repeat(7, minmax(84px, 1fr))' }}>
               <div className="flex items-center justify-center">
                 <Clock size={12} className="text-muted-foreground" />
               </div>
@@ -346,7 +362,7 @@ function WeeklyCalendar() {
                 const date = addDays(weekStart, i);
                 const isToday = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
                 return (
-                  <div key={dia} className={`text-center py-2.5 rounded-xl border ${isToday ? 'bg-primary/15 border-primary/30' : 'border-white/5 bg-white/2'}`}>
+                  <div key={dia} className={`text-center py-2 border-b-2 ${isToday ? 'border-primary' : 'border-transparent'}`}>
                     <p className={`text-[11px] font-semibold tracking-wide uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
                       {DIAS_SHORT[dia]}
                     </p>
@@ -368,14 +384,14 @@ function WeeklyCalendar() {
               </div>
             ) : (
               allHours.map((hour) => (
-                <div key={hour} className="grid gap-1 mb-1 min-h-[68px]" style={{ gridTemplateColumns: '48px repeat(7, minmax(128px, 1fr))' }}>
+                <div key={hour} className="grid gap-1 mb-1 min-h-[68px]" style={{ gridTemplateColumns: '40px repeat(7, minmax(84px, 1fr))' }}>
                   <div className="flex items-start justify-end pr-2 pt-2">
                     <span className="text-[10px] text-muted-foreground font-mono">{hour}:00</span>
                   </div>
                   {DIAS_ORDER.map((dia) => {
                     const sessions = byDay[dia].filter((s) => s.horaInicio.startsWith(hour));
                     return (
-                      <div key={dia} className="space-y-1 min-h-[64px] bg-white/2 rounded-lg p-1">
+                      <div key={dia} className="space-y-1 min-h-[64px] bg-white/1.5 border border-white/5 rounded-md p-1">
                         {sessions.map((s) => (
                           <SessionCell
                             key={s.id}
@@ -397,7 +413,14 @@ function WeeklyCalendar() {
 
       <AnimatePresence>
         {cancelTarget && <CancelModal session={cancelTarget} onClose={() => setCancelTarget(null)} />}
-        {attendeesTarget && <AttendeesSheet session={attendeesTarget} onClose={() => setAttendeesTarget(null)} />}
+        {attendeesTarget && (
+          <AttendeesSheet
+            session={attendeesTarget}
+            onClose={() => setAttendeesTarget(null)}
+            onEdit={() => { const s = attendeesTarget; setAttendeesTarget(null); setEditTarget(s); }}
+            onDelete={() => { const s = attendeesTarget; setAttendeesTarget(null); handleDelete(s); }}
+          />
+        )}
         {editTarget && <EditSessionModal session={editTarget} onClose={() => setEditTarget(null)} />}
       </AnimatePresence>
     </div>

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, X, ChevronLeft, DollarSign, Search, Users, Calendar, ChevronRight, Camera, Trash2 } from 'lucide-react';
+import { Check, X, ChevronLeft, DollarSign, Search, ChevronRight, Camera, Trash2, Flame, Clock, Mail, Phone, LogOut, Shield } from 'lucide-react';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { api } from '@/lib/api';
 import { useAvatarUpload } from '@/lib/useAvatarUpload';
@@ -34,6 +34,19 @@ interface Scoring {
   mes: string; totalSesiones: number; asistencias: number; porcentaje: number;
   rachaActual: number; rachaMaxima: number; nivel: string;
 }
+interface PaymentRow {
+  id: string; monto: number; metodo: string; estado: string; createdAt: string; notas?: string | null;
+}
+
+const PAGO_ESTADO: Record<string, { label: string; cls: string }> = {
+  exitoso: { label: 'Pagado', cls: 'text-green-400 bg-green-500/10 border-green-500/20' },
+  pendiente: { label: 'Pendiente', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  fallido: { label: 'Fallido', cls: 'text-red-400 bg-red-500/10 border-red-500/20' },
+  reembolsado: { label: 'Reembolsado', cls: 'text-muted-foreground bg-white/5 border-border' },
+};
+const METODO_LABEL: Record<string, string> = {
+  efectivo: 'Efectivo', wompi_card: 'Tarjeta', wompi_nequi: 'Nequi', wompi_pse: 'PSE',
+};
 
 // ─── Cash Payment Modal ───────────────────────────────────────────────────────
 
@@ -46,7 +59,7 @@ function CashPaymentModal({ userId, userName, open, onClose, onSuccess }: {
     mutationFn: () => api.post('/payments/efectivo', {
       userId, montoCop: Number(amount.replace(/\D/g, '')), notas: notes || 'Cobrado en clase',
     }),
-    onSuccess: () => { toast.success('Pago en efectivo registrado ✅'); setAmount(''); setNotes(''); onSuccess(); onClose(); },
+    onSuccess: () => { toast.success('Pago en efectivo registrado'); setAmount(''); setNotes(''); onSuccess(); onClose(); },
     onError: () => toast.error('No se pudo registrar el pago'),
   });
   if (!open) return null;
@@ -104,7 +117,7 @@ function SessionDetail({ session, onBack }: { session: SessionRow; onBack: () =>
   });
   const bulk = useMutation({
     mutationFn: () => api.post('/attendance/bulk', { sessionId: session.id, presente: true }),
-    onSuccess: () => { toast.success('Todos marcados presentes 🔥'); qc.invalidateQueries({ queryKey: ['attendees', session.id] }); },
+    onSuccess: () => { toast.success('Todos marcados presentes'); qc.invalidateQueries({ queryKey: ['attendees', session.id] }); },
   });
 
   return (
@@ -181,6 +194,13 @@ function UserFicha({ userId, onBack }: { userId: string; onBack: () => void }) {
     queryKey: ['user-scoring', userId],
     queryFn: () => api.get<Scoring>(`/stats/${userId}/scoring`),
   });
+  const qc = useQueryClient();
+  const [cashOpen, setCashOpen] = useState(false);
+  const paymentsQ = useQuery({
+    queryKey: ['user-payments', userId],
+    queryFn: () => api.get<{ payments: PaymentRow[] }>(`/payments?userId=${userId}&limit=20`),
+  });
+  const pagos = paymentsQ.data?.payments ?? [];
 
   const u = profile.data?.user;
   const sc = scoring.data;
@@ -235,7 +255,7 @@ function UserFicha({ userId, onBack }: { userId: string; onBack: () => void }) {
               <p className="text-xs text-muted-foreground -mt-1">{pct}% asistencia</p>
             </Card>
             <Card className="flex flex-col items-center text-center">
-              <p className="text-2xl font-bold">{sc?.rachaActual ?? 0}{(sc?.rachaActual ?? 0) > 3 ? '🔥' : ''}</p>
+              <p className="text-2xl font-bold flex items-center justify-center gap-1">{sc?.rachaActual ?? 0}{(sc?.rachaActual ?? 0) > 3 && <Flame className="size-5 text-orange-400" />}</p>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Racha</p>
             </Card>
             <Card className="flex flex-col items-center text-center">
@@ -267,10 +287,57 @@ function UserFicha({ userId, onBack }: { userId: string; onBack: () => void }) {
               <p className="text-sm text-muted-foreground">{u.bio}</p>
             </Card>
           )}
+
+          {/* Historial de pagos */}
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Pagos</p>
+              <button
+                onClick={() => setCashOpen(true)}
+                className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+              >
+                <DollarSign className="size-3.5" /> Registrar efectivo
+              </button>
+            </div>
+            {paymentsQ.isLoading ? (
+              <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-12 rounded-xl bg-white/5 animate-pulse" />)}</div>
+            ) : pagos.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Sin pagos registrados.</p>
+            ) : (
+              <div className="space-y-2">
+                {pagos.map((p) => {
+                  const est = PAGO_ESTADO[p.estado] ?? PAGO_ESTADO.pendiente;
+                  return (
+                    <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold">{formatCop(p.monto)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {METODO_LABEL[p.metodo] ?? p.metodo} · {new Date(p.createdAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${est.cls}`}>{est.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
         </>
       ) : (
         <Card><p className="text-sm text-muted-foreground text-center py-4">No se encontró el usuario.</p></Card>
       )}
+
+      <AnimatePresence>
+        {cashOpen && u && (
+          <CashPaymentModal
+            userId={userId}
+            userName={u.nombre}
+            open={cashOpen}
+            onClose={() => setCashOpen(false)}
+            onSuccess={() => qc.invalidateQueries({ queryKey: ['user-payments', userId] })}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -333,10 +400,21 @@ function WeekTab() {
 
   if (openSession) return <SessionDetail session={openSession} onBack={() => setOpenSession(null)} />;
 
-  const groups: Record<string, SessionRow[]> = {};
-  for (const s of sessions.data?.sessions ?? []) {
-    (groups[s.fecha] ??= []).push(s);
+  const allSessions = sessions.data?.sessions ?? [];
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(monday, i);
+    return { iso: format(date, 'yyyy-MM-dd'), date };
+  });
+  const times = Array.from(new Set(allSessions.map((s) => s.horaInicio.slice(0, 5)))).sort();
+  const cellMap = new Map<string, SessionRow[]>();
+  for (const s of allSessions) {
+    const key = `${s.fecha}|${s.horaInicio.slice(0, 5)}`;
+    const arr = cellMap.get(key) ?? [];
+    arr.push(s);
+    cellMap.set(key, arr);
   }
+
+  const cap = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
   return (
     <div className="space-y-4">
@@ -348,32 +426,66 @@ function WeekTab() {
           <button onClick={() => setWeekOffset((w) => w + 1)} className="size-8 rounded-full border border-border flex items-center justify-center hover:border-primary transition"><ChevronRight className="size-4" /></button>
         </div>
       </div>
-      {sessions.isLoading && <div className="space-y-2">{[0,1,2,3].map(i=><div key={i} className="h-16 rounded-2xl bg-card animate-pulse"/>)}</div>}
-      {Object.entries(groups).map(([fecha, list]) => (
-        <div key={fecha}>
-          <p className={`text-xs uppercase tracking-wider font-semibold mb-2 ${fecha === today ? 'text-primary' : 'text-muted-foreground'}`}>
-            {fecha === today ? 'HOY · ' : ''}{new Date(fecha + 'T12:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short' })}
-          </p>
-          <div className="space-y-2">
-            {list.map((s) => (
-              <button key={s.id} onClick={() => setOpenSession(s)} className="w-full text-left">
-                <Card className="flex items-center gap-3 hover:border-primary transition">
-                  <div className="w-1 self-stretch rounded-full shrink-0" style={{ background: s.trainingColor }} />
-                  <div className="flex-1">
-                    <p className="font-semibold text-sm">{s.nombre.split('·')[0].trim()}</p>
-                    <p className="text-xs text-muted-foreground">{s.horaInicio.slice(0, 5)} – {s.horaFin.slice(0, 5)}</p>
+
+      {sessions.isLoading ? (
+        <div className="h-64 rounded-lg bg-card animate-pulse" />
+      ) : times.length === 0 ? (
+        <p className="text-center text-muted-foreground py-8 text-sm">Sin clases en esta semana.</p>
+      ) : (
+        <div className="overflow-x-auto -mx-4 px-0 rounded-lg border border-border bg-card">
+          <div className="p-3" style={{ minWidth: '680px' }}>
+            {/* Cabecera días */}
+            <div className="grid gap-1 mb-2" style={{ gridTemplateColumns: '40px repeat(7, minmax(84px, 1fr))' }}>
+              <div className="flex items-center justify-center">
+                <Clock size={12} className="text-muted-foreground" />
+              </div>
+              {days.map((d) => {
+                const isToday = d.iso === today;
+                const wd = d.date.toLocaleDateString('es-CO', { weekday: 'short' }).replace('.', '');
+                return (
+                  <div key={d.iso} className={`text-center py-2 border-b-2 ${isToday ? 'border-primary' : 'border-transparent'}`}>
+                    <p className={`text-[11px] font-semibold tracking-wide uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>{cap(wd)}</p>
+                    <p className={`text-base font-bold mt-0.5 ${isToday ? 'text-primary' : ''}`}>{format(d.date, 'd')}</p>
                   </div>
-                  <span className={`text-sm font-bold shrink-0 ${s.ocupados >= s.capacidadMax ? 'text-red-400' : 'text-primary'}`}>
-                    {s.ocupados}/{s.capacidadMax}
-                  </span>
-                </Card>
-              </button>
+                );
+              })}
+            </div>
+
+            <div className="h-px bg-border mb-2" />
+
+            {/* Filas por hora */}
+            {times.map((hour) => (
+              <div key={hour} className="grid gap-1 mb-1 min-h-[60px]" style={{ gridTemplateColumns: '40px repeat(7, minmax(84px, 1fr))' }}>
+                <div className="flex items-start justify-end pr-2 pt-2">
+                  <span className="text-[10px] text-muted-foreground font-mono">{hour}</span>
+                </div>
+                {days.map((d) => {
+                  const list = cellMap.get(`${d.iso}|${hour}`) ?? [];
+                  return (
+                    <div key={d.iso} className="space-y-1 min-h-[56px] bg-white/1.5 border border-white/5 rounded-md p-1">
+                      {list.map((s) => {
+                        const full = s.ocupados >= s.capacidadMax;
+                        const color = s.trainingColor || '#3DC4DB';
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => setOpenSession(s)}
+                            className="w-full text-left rounded-md p-1.5 border transition active:scale-[0.98]"
+                            style={{ borderLeftColor: color, borderLeftWidth: 3, backgroundColor: `${color}18`, borderColor: `${color}30` }}
+                          >
+                            <p className="text-[10px] font-semibold truncate leading-tight">{s.nombre.split('·')[0].trim()}</p>
+                            <p className="text-[9px] text-muted-foreground">{s.horaInicio.slice(0, 5)}</p>
+                            <p className={`text-[9px] font-bold ${full ? 'text-red-400' : 'text-primary'}`}>{s.ocupados}/{s.capacidadMax}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
             ))}
           </div>
         </div>
-      ))}
-      {Object.keys(groups).length === 0 && !sessions.isLoading && (
-        <p className="text-center text-muted-foreground py-8 text-sm">Sin clases en esta semana.</p>
       )}
     </div>
   );
@@ -451,6 +563,10 @@ function CoachProfileTab() {
     onDone: () => { refetch(); qc.invalidateQueries({ queryKey: ['coach-me-profile'] }); },
   });
 
+  function logout() {
+    api.post('/auth/logout').catch(() => {}).finally(() => { window.location.href = '/'; });
+  }
+
   if (!u) return <div className="h-32 rounded-2xl bg-card animate-pulse" />;
 
   return (
@@ -484,65 +600,56 @@ function CoachProfileTab() {
         <div className="text-center">
           <p className="font-bold text-xl">{u.nombre}</p>
           <p className="text-sm text-muted-foreground">{u.email}</p>
-          {u.telefono && <p className="text-xs text-muted-foreground mt-0.5">{u.telefono}</p>}
         </div>
       </div>
+
+      {/* Detalles */}
+      <div className="rounded-2xl border border-border bg-card divide-y divide-border/60 overflow-hidden">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <Shield className="size-4 text-primary shrink-0" />
+          <span className="text-sm text-muted-foreground flex-1">Rol</span>
+          <span className="text-sm font-medium">Entrenador</span>
+        </div>
+        <div className="flex items-center gap-3 px-4 py-3">
+          <Mail className="size-4 text-muted-foreground shrink-0" />
+          <span className="text-sm text-muted-foreground flex-1">Email</span>
+          <span className="text-sm font-medium truncate max-w-[60%] text-right">{u.email}</span>
+        </div>
+        <div className="flex items-center gap-3 px-4 py-3">
+          <Phone className="size-4 text-muted-foreground shrink-0" />
+          <span className="text-sm text-muted-foreground flex-1">Teléfono</span>
+          <span className="text-sm font-medium">{u.telefono || '—'}</span>
+        </div>
+      </div>
+
+      {/* Cerrar sesión */}
+      <button
+        onClick={logout}
+        className="w-full h-12 rounded-xl border border-red-500/30 text-red-400 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-red-500/10 transition-colors"
+      >
+        <LogOut className="size-4" /> Cerrar sesión
+      </button>
     </div>
   );
 }
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
-type CoachTab = 'hoy' | 'semana' | 'alumnos' | 'perfil';
+export type CoachTab = 'hoy' | 'semana' | 'alumnos' | 'perfil';
 
-import { User } from 'lucide-react';
-
-const TABS: { key: CoachTab; label: string; icon: typeof Calendar }[] = [
-  { key: 'hoy', label: 'Hoy', icon: Calendar },
-  { key: 'semana', label: 'Semana', icon: Calendar },
-  { key: 'alumnos', label: 'Alumnos', icon: Users },
-  { key: 'perfil', label: 'Perfil', icon: User },
-];
-
-export function CoachDashboard() {
-  const [tab, setTab] = useState<CoachTab>('hoy');
-
+export function CoachDashboard({ tab = 'hoy' }: { tab?: CoachTab }) {
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold">Coach</h1>
+      {tab === 'hoy' && (
         <p className="text-sm text-muted-foreground capitalize">
           {new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
-      </div>
+      )}
 
-      {/* Tab selector */}
-      <div className="flex gap-1 bg-card rounded-xl p-1">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${tab === t.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={tab}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.18 }}
-        >
-          {tab === 'hoy' && <TodayTab />}
-          {tab === 'semana' && <WeekTab />}
-          {tab === 'alumnos' && <AlumnosTab />}
-          {tab === 'perfil' && <CoachProfileTab />}
-        </motion.div>
-      </AnimatePresence>
+      {tab === 'hoy' && <TodayTab />}
+      {tab === 'semana' && <WeekTab />}
+      {tab === 'alumnos' && <AlumnosTab />}
+      {tab === 'perfil' && <CoachProfileTab />}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { registerPush } from '@/lib/push';
 
@@ -115,7 +116,14 @@ export function PushPromptModal({ open, onClose }: Props) {
                 disabled={loading}
                 className="w-full py-3.5 rounded-xl text-base font-semibold text-white bg-[#3DC4DB] hover:bg-[#2fafc4] active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-[#3DC4DB]/20"
               >
-                {loading ? 'Activando...' : 'Activar notificaciones 🔔'}
+                {loading ? (
+                  'Activando...'
+                ) : (
+                  <span className="inline-flex items-center gap-2">
+                    Activar notificaciones
+                    <Bell className="size-4" />
+                  </span>
+                )}
               </button>
 
               {/* Ghost dismiss link */}

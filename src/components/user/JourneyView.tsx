@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'motion/react';
-import { CheckCircle2, Circle, Calendar, Dumbbell, Star } from 'lucide-react';
+import { CheckCircle2, Circle, Calendar, Dumbbell, Star, Flag, Flame, Trophy, Sprout, CalendarDays, Zap, Medal, type LucideIcon } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { api } from '@/lib/api';
@@ -16,19 +16,19 @@ interface Journey {
 interface Milestone {
   label: string;
   achieved: boolean;
-  icon: string;
+  Icon: LucideIcon;
 }
 
 function getMilestones(asistencias: number, planes: number): Milestone[] {
   return [
-    { label: 'Primera clase', achieved: asistencias >= 1, icon: '🏁' },
-    { label: '10 clases completadas', achieved: asistencias >= 10, icon: '💪' },
-    { label: '50 clases — ¡Elite!', achieved: asistencias >= 50, icon: '🔥' },
-    { label: '100 clases — ¡Leyenda!', achieved: asistencias >= 100, icon: '🏆' },
-    { label: 'Primer mes en Fitvang', achieved: planes >= 1, icon: '🌱' },
-    { label: '3 meses de constancia', achieved: planes >= 3, icon: '📅' },
-    { label: '6 meses — ¡Comprometido!', achieved: planes >= 6, icon: '⚡' },
-    { label: '1 año en Fitvang', achieved: planes >= 12, icon: '🎖️' },
+    { label: 'Primera clase', achieved: asistencias >= 1, Icon: Flag },
+    { label: '10 clases completadas', achieved: asistencias >= 10, Icon: Dumbbell },
+    { label: '50 clases — ¡Elite!', achieved: asistencias >= 50, Icon: Flame },
+    { label: '100 clases — ¡Leyenda!', achieved: asistencias >= 100, Icon: Trophy },
+    { label: 'Primer mes en Fitvang', achieved: planes >= 1, Icon: Sprout },
+    { label: '3 meses de constancia', achieved: planes >= 3, Icon: CalendarDays },
+    { label: '6 meses — ¡Comprometido!', achieved: planes >= 6, Icon: Zap },
+    { label: '1 año en Fitvang', achieved: planes >= 12, Icon: Medal },
   ];
 }
 
@@ -58,8 +58,7 @@ export function JourneyView() {
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
-        <h1 className="text-3xl font-bold">Mi Recorrido</h1>
-        <p className="text-sm text-muted-foreground mt-1">Tu historia en el club Fitvang.</p>
+        <p className="text-sm text-muted-foreground">Tu historia en el club Fitvang.</p>
       </motion.div>
 
       {isLoading ? (
@@ -125,7 +124,9 @@ export function JourneyView() {
                     }
                   >
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl leading-none">{milestone.icon}</span>
+                      <milestone.Icon
+                        className={`size-6 shrink-0 ${milestone.achieved ? 'text-primary' : 'text-muted-foreground/50'}`}
+                      />
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm font-medium ${milestone.achieved ? 'text-foreground' : 'text-muted-foreground'}`}>
                           {milestone.label}
@@ -152,7 +153,7 @@ export function JourneyView() {
               transition={{ duration: 0.4, delay: 0.9 }}
             >
               <Card className="border-primary/60 bg-gradient-to-br from-primary/10 to-transparent text-center py-6">
-                <p className="text-3xl">🏆</p>
+                <Trophy className="size-8 text-primary mx-auto" />
                 <p className="mt-2 font-bold text-primary">¡Leyenda Fitvang!</p>
                 <p className="text-sm text-muted-foreground mt-1">Has completado todos los logros. ¡Eres increíble!</p>
               </Card>

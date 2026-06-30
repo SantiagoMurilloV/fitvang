@@ -140,10 +140,7 @@ function DangerZone() {
 export function ConfigAdmin() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Configuración</h1>
-        <p className="text-sm text-muted-foreground mt-1">Ajustes generales del club.</p>
-      </div>
+      <p className="text-sm text-muted-foreground">Ajustes generales del club.</p>
 
       <DangerZone />
     </div>

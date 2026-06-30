@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
   ChevronLeft, Check, ToggleLeft, ToggleRight,
   User, Phone, Mail, CreditCard, Calendar, Weight, Ruler,
-  Tag, Eye, EyeOff, Camera, Loader2, Trash2, Lock,
+  Tag, Eye, EyeOff, Camera, Loader2, Trash2, Lock, Pencil,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
@@ -112,7 +112,7 @@ function Field({
         ) : (
           <button onClick={start} className="w-full text-left group flex items-center justify-between gap-2 mt-0.5">
             <p className="text-sm font-medium break-words">{value || <span className="text-muted-foreground/50 italic">No registrado</span>}</p>
-            <span className="text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0"><Check size={12} className="opacity-0 group-hover:opacity-0" /><span className="text-[10px]">✎</span></span>
+            <Pencil size={12} className="text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0" />
           </button>
         )}
       </div>
@@ -164,7 +164,7 @@ function NameField({ nombre, userId }: { nombre: string; userId: string }) {
   return (
     <button onClick={start} className="flex items-center gap-1.5 text-left">
       <span className="font-bold text-lg leading-tight">{nombre}</span>
-      <span className="text-primary/50 text-[11px]">✎</span>
+      <Pencil size={12} className="text-primary/50 shrink-0" />
     </button>
   );
 }
@@ -236,7 +236,7 @@ function PasswordField({ userId, value }: { userId: string; hasPassword?: boolea
           <>
             <code className="text-sm font-mono break-all flex-1">{current}</code>
             <button type="button" onClick={copy} className="text-[11px] text-primary hover:underline shrink-0">
-              {copied ? 'Copiado ✓' : 'Copiar'}
+              {copied ? 'Copiado' : 'Copiar'}
             </button>
           </>
         ) : (

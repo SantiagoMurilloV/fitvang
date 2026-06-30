@@ -44,6 +44,9 @@ const APP_TABS = [
 
 const COACH_TABS = [
   { label: 'Hoy', href: '/coach', icon: LayoutDashboard, exact: true },
+  { label: 'Semana', href: '/coach/semana', icon: Calendar },
+  { label: 'Alumnos', href: '/coach/alumnos', icon: Users2 },
+  { label: 'Perfil', href: '/coach/perfil', icon: User },
 ];
 
 const ACUDIENTE_TABS = [
@@ -70,7 +73,7 @@ function isActive(href: string, exact?: boolean): boolean {
   return path === href || path.startsWith(href + '/');
 }
 
-function BottomNav({ variant }: { variant: 'app' | 'coach' | 'admin' | 'acudiente' }) {
+function BottomNav({ variant, mounted }: { variant: 'app' | 'coach' | 'admin' | 'acudiente'; mounted: boolean }) {
   const tabs = VARIANT_TABS[variant];
   return (
     <nav
@@ -78,7 +81,7 @@ function BottomNav({ variant }: { variant: 'app' | 'coach' | 'admin' | 'acudient
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }}
     >
       {tabs.map((tab) => {
-        const active = isActive(tab.href, (tab as any).exact);
+        const active = mounted && isActive(tab.href, (tab as any).exact);
         const Icon = tab.icon;
         return (
           <a
@@ -221,7 +224,12 @@ function getHeaderConfig(variant: string): HeaderConfig {
   }
 
   // Rutas coach
-  if (variant === 'coach') return { title: '' };
+  if (variant === 'coach') {
+    if (path.startsWith('/coach/semana')) return { title: 'Semana' };
+    if (path.startsWith('/coach/alumnos')) return { title: 'Alumnos' };
+    if (path.startsWith('/coach/perfil')) return { title: 'Perfil' };
+    return { title: '' }; // /coach (Hoy) → muestra el chip COACH
+  }
 
   return { title: '' };
 }
@@ -230,9 +238,17 @@ function Shell({ user, variant, children }: Props) {
   const setUser = useAuth((s) => s.setUser);
   const fire = useUiActions((s) => s.fire);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { show: showIosBanner, dismiss: dismissIosBanner } = useIosInstallBanner();
-  const header = getHeaderConfig(variant);
+  // getHeaderConfig/isActive dependen de window.location → en SSR no existe. Para
+  // evitar mismatch de hidratación, en el primer render (server + cliente) usamos
+  // un header neutro y recién tras montar calculamos el real.
+  const header = mounted ? getHeaderConfig(variant) : { title: '' };
   const isDashboard = !header.title; // sin título = home/dashboard
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setUser(user);
@@ -292,9 +308,15 @@ function Shell({ user, variant, children }: Props) {
         </div>
       </header>
 
-      <main className="flex-1 px-4 py-5 max-w-5xl w-full mx-auto pb-28">{children}</main>
+      <main
+        className={`flex-1 px-4 py-5 w-full mx-auto pb-28 ${
+          variant === 'admin' ? 'max-w-7xl' : 'max-w-5xl'
+        }`}
+      >
+        {children}
+      </main>
 
-      <BottomNav variant={variant} />
+      <BottomNav variant={variant} mounted={mounted} />
 
       <PushPromptModal open={showPushPrompt} onClose={() => setShowPushPrompt(false)} />
       {showIosBanner && <IosBanner onDismiss={dismissIosBanner} />}

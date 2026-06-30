@@ -49,7 +49,7 @@ export function PaymentsView() {
     const params = new URLSearchParams(window.location.search);
     const resultado = params.get('resultado');
     if (resultado === 'ok') {
-      toast.success('¡Pago procesado! Tu plan se activará en segundos. 💪');
+      toast.success('¡Pago procesado! Tu plan se activará en segundos.');
       qc.invalidateQueries({ queryKey: ['payments-me'] });
       qc.invalidateQueries({ queryKey: ['plan-me'] });
       // Limpiar query params sin recargar
@@ -99,8 +99,6 @@ export function PaymentsView() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold">Mis pagos</h1>
-
       {plan.data?.plan && (
         <Card className="border-primary/30">
           <p className="text-xs uppercase tracking-wider text-primary">Plan actual</p>

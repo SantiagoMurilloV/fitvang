@@ -449,7 +449,7 @@ export function UsersAdmin() {
               if (pwd) {
                 // Modal explícito con copiar (antes: contraseña en claro en un toast 15s)
                 Swal.fire({
-                  title: 'Usuario creado ✓',
+                  title: 'Usuario creado',
                   html: `<p style="margin-bottom:10px">Comparte esta contraseña temporal con el usuario:</p>
                          <div style="display:flex;gap:8px;align-items:center;justify-content:center">
                            <code style="font-size:20px;font-weight:700;letter-spacing:1px">${pwd}</code>
@@ -463,7 +463,7 @@ export function UsersAdmin() {
                     document.getElementById('fv-copy-pwd')?.addEventListener('click', () => {
                       navigator.clipboard?.writeText(pwd);
                       const b = document.getElementById('fv-copy-pwd');
-                      if (b) b.textContent = 'Copiado ✓';
+                      if (b) b.textContent = 'Copiado';
                     });
                   },
                 });

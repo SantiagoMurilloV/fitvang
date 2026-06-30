@@ -147,7 +147,7 @@ export function AcudienteDashboard() {
     <div className="space-y-5">
       {/* Saludo */}
       <div>
-        <h1 className="text-3xl font-bold">Hola, {firstName} 👋</h1>
+        <h1 className="text-3xl font-bold">Hola, {firstName}</h1>
         <p className="text-sm text-muted-foreground capitalize">{todaySpanish()}</p>
       </div>
 

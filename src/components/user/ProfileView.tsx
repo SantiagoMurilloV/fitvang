@@ -223,7 +223,7 @@ export function ProfileView() {
       const numKeys = ['pesoKg', 'alturaCm'];
       const parsed = numKeys.includes(key) ? (value ? Number(value) : null) : value || null;
       await patch.mutateAsync({ [key]: parsed });
-      toast.success('Guardado ✓');
+      toast.success('Guardado');
     };
   }
 
@@ -256,8 +256,6 @@ export function ProfileView() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold">Mi perfil</h1>
-
       {/* Avatar + nombre */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="flex flex-col items-center py-6">
@@ -270,7 +268,7 @@ export function ProfileView() {
             }}
             onNameSave={async (nombre) => {
               await patch.mutateAsync({ nombreCompleto: nombre });
-              toast.success('Nombre actualizado ✓');
+              toast.success('Nombre actualizado');
             }}
           />
           {memberSince && (

@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, X, Loader2 } from 'lucide-react';
+import {
+  Bell, X, Loader2,
+  CalendarCheck, CircleDollarSign, CircleAlert, Banknote, CalendarClock,
+  CalendarX, ClipboardList, CircleX, PartyPopper, Ban, Dumbbell,
+  type LucideIcon,
+} from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { relativeTime } from '@/lib/utils';
@@ -15,19 +20,34 @@ interface NotificationRow {
   createdAt: string;
 }
 
-const TIPO_ICON: Record<string, string> = {
-  asistencia: '✅',
-  pago_ok: '💪',
-  pago_fail: '⚠️',
-  pago_efectivo: '💵',
-  plan_vence: '📅',
-  plan_vencido: '🔄',
-  reserva: '📋',
-  reserva_cancelada: '❌',
-  cupo_disponible: '🎉',
-  clase_cancelada: '🚫',
-  bienvenida: '🏋️',
-  sistema: '🔔',
+const TIPO_ICON: Record<string, LucideIcon> = {
+  asistencia: CalendarCheck,
+  pago_ok: CircleDollarSign,
+  pago_fail: CircleAlert,
+  pago_efectivo: Banknote,
+  plan_vence: CalendarClock,
+  plan_vencido: CalendarX,
+  reserva: ClipboardList,
+  reserva_cancelada: CircleX,
+  cupo_disponible: PartyPopper,
+  clase_cancelada: Ban,
+  bienvenida: Dumbbell,
+  sistema: Bell,
+};
+
+const TIPO_COLOR: Record<string, string> = {
+  asistencia: '#4ade80',
+  pago_ok: '#4ade80',
+  pago_fail: '#f87171',
+  pago_efectivo: '#4ade80',
+  plan_vence: '#facc15',
+  plan_vencido: '#f87171',
+  reserva: '#3DC4DB',
+  reserva_cancelada: '#f87171',
+  cupo_disponible: '#3DC4DB',
+  clase_cancelada: '#f87171',
+  bienvenida: '#3DC4DB',
+  sistema: '#9ca3af',
 };
 
 export function NotificationBell() {
@@ -78,14 +98,14 @@ export function NotificationBell() {
       </button>
 
       {open && createPortal(
-        <div className="fixed inset-0 z-[300] flex justify-end" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-300" onClick={() => setOpen(false)}>
           <div
-            className="w-full max-w-sm flex flex-col bg-[#111] border-l border-white/10 shadow-2xl"
-            style={{ paddingTop: 'env(safe-area-inset-top)', height: '100%' }}
+            className="fixed flex flex-col w-[min(360px,calc(100vw-1rem))] max-h-[min(70vh,520px)] rounded-2xl bg-[#111] border border-white/10 shadow-2xl overflow-hidden"
+            style={{ top: 'calc(env(safe-area-inset-top) + 60px)', right: '0.5rem' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header fijo */}
-            <div className="flex-none flex items-center justify-between px-4 py-4 border-b border-white/10">
+            <div className="flex-none flex items-center justify-between px-4 py-3 border-b border-white/10">
               <h2 className="font-bold text-lg text-white">Notificaciones</h2>
               <div className="flex items-center gap-3">
                 {unread > 0 && (
@@ -105,11 +125,11 @@ export function NotificationBell() {
             {/* Lista scrollable */}
             <div className="flex-1 overflow-y-auto">
               {isLoading ? (
-                <div className="flex items-center justify-center py-16">
+                <div className="flex items-center justify-center py-10">
                   <Loader2 className="size-6 animate-spin text-[#3DC4DB]" />
                 </div>
               ) : notifs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                <div className="flex flex-col items-center justify-center py-10 px-6 text-center">
                   <Bell className="size-10 text-white/20 mb-3" />
                   <p className="text-sm font-medium text-white/50">Sin notificaciones aún</p>
                   <p className="text-xs text-white/30 mt-1">Cuando haya actividad te avisamos aquí.</p>
@@ -123,9 +143,15 @@ export function NotificationBell() {
                         className="flex items-start gap-3 p-4 hover:bg-white/5 transition"
                         onClick={() => setOpen(false)}
                       >
-                        <span className="text-lg mt-0.5 flex-none">
-                          {TIPO_ICON[n.tipo] ?? '🔔'}
-                        </span>
+                        {(() => {
+                          const Icon = TIPO_ICON[n.tipo] ?? Bell;
+                          return (
+                            <Icon
+                              className="size-5 mt-0.5 flex-none"
+                              style={{ color: TIPO_COLOR[n.tipo] ?? '#9ca3af' }}
+                            />
+                          );
+                        })()}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <p className={`text-sm leading-tight ${!n.leida ? 'font-semibold text-white' : 'font-medium text-white/60'}`}>

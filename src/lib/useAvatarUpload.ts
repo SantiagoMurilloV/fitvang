@@ -22,7 +22,7 @@ export function useAvatarUpload(opts: { patchPath: string; onDone?: (url: string
       const url = await uploadAvatar(file);
       await api.patch(opts.patchPath, { avatarUrl: url });
       opts.onDone?.(url);
-      toast.success('Foto actualizada ✓');
+      toast.success('Foto actualizada');
     } catch (err: any) {
       toast.error(err?.message ?? 'No se pudo subir la foto.');
     } finally {

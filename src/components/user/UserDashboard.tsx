@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'motion/react';
+import { Sprout, Medal, Flame, Zap, Crown, Check, type LucideIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
@@ -49,12 +50,12 @@ const NIVEL_LABEL: Record<string, string> = {
   leyenda: 'Leyenda',
 };
 
-const NIVEL_STAR: Record<string, string> = {
-  rookie: '⭐',
-  regular: '⭐⭐',
-  constante: '⭐⭐⭐',
-  elite: '🌟🌟🌟🌟',
-  leyenda: '🏆',
+const NIVEL_ICON: Record<string, { Icon: LucideIcon; color: string }> = {
+  rookie: { Icon: Sprout, color: '#4ade80' },
+  regular: { Icon: Medal, color: '#3DC4DB' },
+  constante: { Icon: Flame, color: '#facc15' },
+  elite: { Icon: Zap, color: '#f87171' },
+  leyenda: { Icon: Crown, color: '#fbbf24' },
 };
 
 function todaySpanish(): string {
@@ -104,7 +105,7 @@ export function UserDashboard() {
     <div className="space-y-5">
       {/* Greeting */}
       <div>
-        <h1 className="text-3xl font-bold">Hola, {firstName} 👋</h1>
+        <h1 className="text-3xl font-bold">Hola, {firstName}</h1>
         <p className="text-sm text-muted-foreground capitalize">{todaySpanish()}</p>
       </div>
 
@@ -165,9 +166,9 @@ export function UserDashboard() {
           transition={{ delay: 0.05 }}
           className="rounded-2xl bg-card border border-border p-4 flex flex-col items-center text-center"
         >
-          <p className="text-2xl font-bold">
+          <p className="text-2xl font-bold flex items-center justify-center gap-1">
             {sc?.rachaActual ?? 0}
-            {(sc?.rachaActual ?? 0) > 5 ? ' 🔥' : ''}
+            {(sc?.rachaActual ?? 0) > 5 && <Flame className="size-5 text-orange-400" />}
           </p>
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">días racha</p>
         </motion.div>
@@ -188,7 +189,11 @@ export function UserDashboard() {
           transition={{ delay: 0.15 }}
           className="rounded-2xl bg-card border border-border p-4 flex flex-col items-center text-center"
         >
-          <p className="text-lg font-bold">{NIVEL_STAR[nivel]}</p>
+          {(() => {
+            const N = NIVEL_ICON[nivel];
+            const Icon = N.Icon;
+            return <Icon className="size-6" style={{ color: N.color }} />;
+          })()}
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">
             {NIVEL_LABEL[nivel]}
           </p>
@@ -255,7 +260,7 @@ export function UserDashboard() {
                     </p>
                   )}
                 </div>
-                <span className="text-xs text-primary font-semibold shrink-0">✓</span>
+                <Check className="size-4 text-primary shrink-0" />
               </div>
             ))}
           </div>
