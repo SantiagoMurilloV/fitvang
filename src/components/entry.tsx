@@ -56,12 +56,15 @@ const VARIANT_HOME: Record<'app' | 'coach' | 'admin' | 'acudiente', string> = {
   acudiente: '/acudiente',
 };
 
-export default function Entry({ view }: { view: ViewKey }) {
+export default function Entry({ view, user: ssrUser }: { view: ViewKey; user?: SessionUser }) {
   const v = VIEWS[view];
-  const [user, setUser] = useState<SessionUser | null>(null);
-  const [checking, setChecking] = useState(true);
+  // El SSR (guardArea) ya verificó sesión y área y nos pasa el usuario → render
+  // inmediato, sin spinner ni un segundo /auth/me. Solo hacemos fetch si falta.
+  const [user, setUser] = useState<SessionUser | null>(ssrUser ?? null);
+  const [checking, setChecking] = useState(!ssrUser);
 
   useEffect(() => {
+    if (ssrUser) return; // ya tenemos usuario del SSR
     const next = encodeURIComponent(window.location.pathname);
 
     function applyUser(u: SessionUser) {

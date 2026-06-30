@@ -7,6 +7,8 @@ export default defineConfig({
   output: 'server',
   adapter: vercel(),
   devToolbar: { enabled: false },
+  // Precarga las pantallas (HTML) al entrar en viewport → cambio casi instantáneo
+  prefetch: { prefetchAll: true, defaultStrategy: 'viewport' },
   integrations: [react()],
   vite: {
     plugins: [tailwindcss()],

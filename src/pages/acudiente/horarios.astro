@@ -3,8 +3,8 @@ import RootLayout from '@/layouts/RootLayout.astro';
 import Entry from '@/components/entry';
 import { guardArea } from '@/lib/requireAuth';
 const __guard = await guardArea(Astro.request, 'acudiente');
-if (__guard) return Astro.redirect(__guard);
+if (__guard.redirect) return Astro.redirect(__guard.redirect);
 ---
 <RootLayout title="Fitvang — Horarios">
-  <Entry client:load view="acudiente/horarios" />
+  <Entry client:load view="acudiente/horarios" user={__guard.user} />
 </RootLayout>
