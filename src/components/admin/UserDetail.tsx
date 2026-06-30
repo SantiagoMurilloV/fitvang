@@ -46,6 +46,7 @@ interface PlanActivo {
   fechaInicio: string;
   fechaFin: string;
   estado: string;
+  renovacionAutomatica: boolean;
 }
 
 interface PlanType {
@@ -273,6 +274,8 @@ function AssignPlanPanel({ userId, onAssigned }: { userId: string; onAssigned: (
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState('');
   const [precio, setPrecio] = useState('');
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [autoRenov, setAutoRenov] = useState(false);
 
   const { data } = useQuery({
     queryKey: ['plan-types'],
@@ -280,19 +283,22 @@ function AssignPlanPanel({ userId, onAssigned }: { userId: string; onAssigned: (
   });
 
   const plans = (data?.planTypes ?? []).filter((p: any) => p.activo !== false);
-  const selected = plans.find((p) => p.id === selectedId);
 
   const assign = useMutation({
     mutationFn: () => api.post('/plans/assign', {
       userId,
       planTypeId: selectedId,
       precioCopAplicado: precio ? Number(precio) : undefined,
+      fechaInicio: fechaInicio || undefined,
+      renovacionAutomatica: autoRenov,
     }),
     onSuccess: () => {
       toast.success('Plan asignado');
       setOpen(false);
       setSelectedId('');
       setPrecio('');
+      setFechaInicio('');
+      setAutoRenov(false);
       onAssigned();
     },
     onError: () => toast.error('No se pudo asignar el plan'),
@@ -337,14 +343,35 @@ function AssignPlanPanel({ userId, onAssigned }: { userId: string; onAssigned: (
               </div>
 
               {selectedId && (
-                <div>
-                  <label className="text-xs text-muted-foreground">Precio aplicado (COP)</label>
-                  <input
-                    type="number"
-                    value={precio}
-                    onChange={(e) => setPrecio(e.target.value)}
-                    className="mt-1 w-full h-10 px-3 rounded-xl bg-background border border-border focus:border-primary focus:outline-none text-sm"
-                  />
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground">Precio aplicado (COP)</label>
+                    <input
+                      type="number"
+                      value={precio}
+                      onChange={(e) => setPrecio(e.target.value)}
+                      className="mt-1 w-full h-10 px-3 rounded-xl bg-background border border-border focus:border-primary focus:outline-none text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Fecha de inicio (opcional)</label>
+                    <input
+                      type="date"
+                      value={fechaInicio}
+                      onChange={(e) => setFechaInicio(e.target.value)}
+                      className="mt-1 w-full h-10 px-3 rounded-xl bg-background border border-border focus:border-primary focus:outline-none text-sm"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Si lo dejas vacío, empieza hoy.</p>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoRenov}
+                      onChange={(e) => setAutoRenov(e.target.checked)}
+                      className="size-4 accent-primary"
+                    />
+                    Renovación automática
+                  </label>
                 </div>
               )}
 
@@ -360,6 +387,113 @@ function AssignPlanPanel({ userId, onAssigned }: { userId: string; onAssigned: (
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/* ─── Fila de plan activo (fechas editables, renovación, renovar, desactivar) ─── */
+function PlanRow({ plan, onChanged }: { plan: PlanActivo; onChanged: () => void }) {
+  const [ini, setIni] = useState(plan.fechaInicio.slice(0, 10));
+  const [fin, setFin] = useState(plan.fechaFin.slice(0, 10));
+  const dirty = ini !== plan.fechaInicio.slice(0, 10) || fin !== plan.fechaFin.slice(0, 10);
+
+  const save = useMutation({
+    mutationFn: () => api.patch(`/plans/assign/${plan.id}`, { fechaInicio: ini, fechaFin: fin }),
+    onSuccess: () => { toast.success('Fechas actualizadas'); onChanged(); },
+    onError: () => toast.error('No se pudieron guardar las fechas'),
+  });
+  const toggleRenov = useMutation({
+    mutationFn: (v: boolean) => api.patch(`/plans/assign/${plan.id}`, { renovacionAutomatica: v }),
+    onSuccess: () => onChanged(),
+    onError: () => toast.error('No se pudo cambiar la renovación'),
+  });
+  const renew = useMutation({
+    mutationFn: () => api.post(`/plans/assign/${plan.id}/renew`),
+    onSuccess: () => { toast.success('Plan renovado — cargo pendiente creado'); onChanged(); },
+    onError: () => toast.error('No se pudo renovar'),
+  });
+  const del = useMutation({
+    mutationFn: () => api.delete(`/plans/assign/${plan.id}`),
+    onSuccess: () => { toast.success('Plan desactivado'); onChanged(); },
+    onError: () => toast.error('No se pudo desactivar'),
+  });
+
+  async function confirmDelete() {
+    const r = await Swal.fire({
+      title: '¿Desactivar plan?',
+      text: 'Se cancela el plan y se quita su cargo pendiente (los pagos exitosos NO se borran).',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, desactivar',
+      cancelButtonText: 'No',
+      background: '#0f0f11',
+      color: '#f8f8f8',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#2a2a2f',
+      reverseButtons: true,
+    });
+    if (r.isConfirmed) del.mutate();
+  }
+
+  const busy = save.isPending || toggleRenov.isPending || renew.isPending || del.isPending;
+
+  return (
+    <div className="rounded-xl bg-background border border-border p-3 space-y-2.5">
+      <div className="flex items-start gap-2">
+        <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: plan.trainingColor || '#3DC4DB' }} />
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm truncate">{plan.planNombre}</p>
+          <p className="text-xs text-muted-foreground">{plan.trainingNombre} · {plan.modalidad}</p>
+          <p className="text-xs font-semibold text-primary mt-0.5">{formatCop(plan.precioCopAplicado)}</p>
+        </div>
+        <button
+          onClick={confirmDelete}
+          disabled={busy}
+          title="Desactivar plan"
+          className="size-8 rounded-lg text-red-400/70 hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0 disabled:opacity-50"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+
+      {/* Fechas editables */}
+      <div className="flex items-center gap-1.5">
+        <input type="date" value={ini} onChange={(e) => setIni(e.target.value)} className="flex-1 h-9 px-2 rounded-lg bg-card border border-border text-xs outline-none focus:border-primary" />
+        <span className="text-muted-foreground text-xs">–</span>
+        <input type="date" value={fin} onChange={(e) => setFin(e.target.value)} className="flex-1 h-9 px-2 rounded-lg bg-card border border-border text-xs outline-none focus:border-primary" />
+        {dirty && (
+          <button onClick={() => save.mutate()} disabled={busy} className="h-9 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-50">
+            Guardar
+          </button>
+        )}
+      </div>
+
+      {/* Renovación + renovar ahora */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center rounded-lg bg-card border border-border p-0.5">
+          <button
+            onClick={() => toggleRenov.mutate(true)}
+            disabled={busy}
+            className={`px-2.5 h-7 rounded-md text-[11px] font-medium transition-colors ${plan.renovacionAutomatica ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+          >
+            Automática
+          </button>
+          <button
+            onClick={() => toggleRenov.mutate(false)}
+            disabled={busy}
+            className={`px-2.5 h-7 rounded-md text-[11px] font-medium transition-colors ${!plan.renovacionAutomatica ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+          >
+            Manual
+          </button>
+        </div>
+        <button
+          onClick={() => renew.mutate()}
+          disabled={busy}
+          className="h-8 px-3 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors disabled:opacity-50"
+        >
+          Renovar
+        </button>
+      </div>
     </div>
   );
 }
@@ -400,33 +534,6 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
     },
     onError: () => toast.error('No se pudo actualizar'),
   });
-
-  const deactivatePlan = useMutation({
-    mutationFn: (planId: string) => api.delete(`/plans/assign/${planId}`),
-    onSuccess: () => {
-      toast.success('Plan desactivado');
-      refetch();
-      qc.invalidateQueries({ queryKey: ['admin-payments'] });
-    },
-    onError: () => toast.error('No se pudo desactivar el plan'),
-  });
-
-  async function confirmDeactivatePlan(planId: string, nombre: string) {
-    const r = await Swal.fire({
-      title: '¿Desactivar plan?',
-      text: `${nombre} — se cancelará y se quitará su cargo pendiente si no se ha pagado.`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Sí, desactivar',
-      cancelButtonText: 'No',
-      background: '#0f0f11',
-      color: '#f8f8f8',
-      confirmButtonColor: '#ef4444',
-      cancelButtonColor: '#2a2a2f',
-      reverseButtons: true,
-    });
-    if (r.isConfirmed) deactivatePlan.mutate(planId);
-  }
 
   async function handleDelete() {
     const result = await Swal.fire({
@@ -579,27 +686,7 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
                 {planes.length > 0 ? (
                   <div className="space-y-2">
                     {planes.map((plan) => (
-                      <div key={plan.id} className="flex items-start gap-3">
-                        <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: plan.trainingColor || '#3DC4DB' }} />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm">{plan.planNombre}</p>
-                          <p className="text-xs text-muted-foreground">{plan.trainingNombre} · {plan.modalidad}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {new Date(plan.fechaInicio).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })}
-                            {' – '}
-                            {new Date(plan.fechaFin).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </p>
-                          <p className="text-xs font-semibold text-primary mt-1">{formatCop(plan.precioCopAplicado)}</p>
-                        </div>
-                        <button
-                          onClick={() => confirmDeactivatePlan(plan.id, plan.planNombre)}
-                          disabled={deactivatePlan.isPending}
-                          title="Desactivar plan"
-                          className="size-8 rounded-lg text-red-400/70 hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0 disabled:opacity-50"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+                      <PlanRow key={plan.id} plan={plan} onChanged={refetch} />
                     ))}
                   </div>
                 ) : (
