@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { motion } from 'motion/react';
 import { format, parseISO, isThisMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Check } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, StatCard } from '@/components/shared/Card';
 import { formatCop } from '@/lib/utils';
@@ -12,11 +14,15 @@ interface Payment {
   id: string;
   userId: string;
   nombre: string;
+  avatarUrl?: string | null;
   monto: number;
   metodo: string;
   estado: 'exitoso' | 'pendiente' | 'fallido' | 'reembolsado';
   createdAt: string;
   notas?: string;
+  planNombre?: string | null;
+  fechaInicio?: string | null;
+  fechaFin?: string | null;
 }
 
 type FilterTab = 'todos' | 'exitoso' | 'pendiente' | 'fallido';
@@ -48,10 +54,20 @@ const TABS: { key: FilterTab; label: string }[] = [
 /* ─── Component ──────────────────────────────────────────────────────── */
 export function PaymentsAdmin() {
   const [filter, setFilter] = useState<FilterTab>('todos');
+  const qc = useQueryClient();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-payments'],
-    queryFn: () => api.get<{ payments: Payment[] }>('/payments/'),
+    queryFn: () => api.get<{ payments: Payment[] }>('/payments'),
+  });
+
+  const markPaid = useMutation({
+    mutationFn: (id: string) => api.patch(`/payments/${id}`, { metodo: 'efectivo' }),
+    onSuccess: () => {
+      toast.success('Pago marcado como pagado');
+      qc.invalidateQueries({ queryKey: ['admin-payments'] });
+    },
+    onError: () => toast.error('No se pudo marcar el pago.'),
   });
 
   const sorted = useMemo(() => {
@@ -127,6 +143,11 @@ export function PaymentsAdmin() {
             >
               <Card>
                 <div className="flex items-start gap-3">
+                  <div className="size-10 rounded-full bg-primary/20 grid place-items-center text-xs font-bold text-primary shrink-0 overflow-hidden">
+                    {payment.avatarUrl
+                      ? <img src={payment.avatarUrl} alt={payment.nombre} className="size-full object-cover" />
+                      : payment.nombre.split(' ').map((s) => s[0]).slice(0, 2).join('')}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-sm">{payment.nombre}</p>
@@ -136,6 +157,14 @@ export function PaymentsAdmin() {
                         {payment.metodo}
                       </span>
                     </div>
+                    {payment.planNombre && (
+                      <p className="text-xs text-foreground/80 mt-0.5">{payment.planNombre}</p>
+                    )}
+                    {payment.fechaInicio && payment.fechaFin && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {format(parseISO(payment.fechaInicio), 'd MMM', { locale: es })} – {format(parseISO(payment.fechaFin), 'd MMM yyyy', { locale: es })}
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {format(parseISO(payment.createdAt), "d MMM yyyy, HH:mm", { locale: es })}
                     </p>
@@ -143,13 +172,22 @@ export function PaymentsAdmin() {
                       <p className="text-xs text-muted-foreground italic mt-1 truncate">{payment.notas}</p>
                     )}
                   </div>
-                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
                     <p className="font-bold text-sm">{formatCop(payment.monto)}</p>
                     <span
                       className={`text-[10px] px-2 py-0.5 rounded-full border capitalize ${ESTADO_STYLES[payment.estado]}`}
                     >
                       {payment.estado}
                     </span>
+                    {payment.estado === 'pendiente' && (
+                      <button
+                        onClick={() => markPaid.mutate(payment.id)}
+                        disabled={markPaid.isPending}
+                        className="mt-1 flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-green-500/15 text-green-400 border border-green-500/30 hover:bg-green-500/25 transition disabled:opacity-50"
+                      >
+                        <Check className="size-3" /> Marcar pagado
+                      </button>
+                    )}
                   </div>
                 </div>
               </Card>

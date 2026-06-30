@@ -372,7 +372,7 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['user-ficha', userId],
-    queryFn: () => api.get<{ user: ProfileUser; planActivo: PlanActivo | null }>(`/users/${userId}/ficha`),
+    queryFn: () => api.get<{ user: ProfileUser; planActivo: PlanActivo | null; planesActivos: PlanActivo[] }>(`/users/${userId}/ficha`),
   });
 
   const { uploading: uploadingAvatar, upload, remove } = useAvatarUpload({
@@ -401,6 +401,33 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
     onError: () => toast.error('No se pudo actualizar'),
   });
 
+  const deactivatePlan = useMutation({
+    mutationFn: (planId: string) => api.delete(`/plans/assign/${planId}`),
+    onSuccess: () => {
+      toast.success('Plan desactivado');
+      refetch();
+      qc.invalidateQueries({ queryKey: ['admin-payments'] });
+    },
+    onError: () => toast.error('No se pudo desactivar el plan'),
+  });
+
+  async function confirmDeactivatePlan(planId: string, nombre: string) {
+    const r = await Swal.fire({
+      title: '¿Desactivar plan?',
+      text: `${nombre} — se cancelará y se quitará su cargo pendiente si no se ha pagado.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, desactivar',
+      cancelButtonText: 'No',
+      background: '#0f0f11',
+      color: '#f8f8f8',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#2a2a2f',
+      reverseButtons: true,
+    });
+    if (r.isConfirmed) deactivatePlan.mutate(planId);
+  }
+
   async function handleDelete() {
     const result = await Swal.fire({
       title: '¿Eliminar usuario?',
@@ -426,7 +453,7 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
   }
 
   const u = data?.user;
-  const plan = data?.planActivo;
+  const planes = data?.planesActivos ?? [];
   const initials = u?.nombre.split(' ').map((s: string) => s[0]).slice(0, 2).join('') ?? '?';
 
   const ROL_LABEL: Record<string, string> = {
@@ -548,20 +575,32 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
             {/* Plan activo — solo para clientes */}
             {u.rol === 'user' && (
               <div className="rounded-2xl bg-card border border-border p-4 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Plan activo</p>
-                {plan ? (
-                  <div className="flex items-start gap-3">
-                    <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: plan.trainingColor || '#3DC4DB' }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm">{plan.planNombre}</p>
-                      <p className="text-xs text-muted-foreground">{plan.trainingNombre} · {plan.modalidad}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {new Date(plan.fechaInicio).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })}
-                        {' – '}
-                        {new Date(plan.fechaFin).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </p>
-                      <p className="text-xs font-semibold text-primary mt-1">{formatCop(plan.precioCopAplicado)}</p>
-                    </div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Planes activos</p>
+                {planes.length > 0 ? (
+                  <div className="space-y-2">
+                    {planes.map((plan) => (
+                      <div key={plan.id} className="flex items-start gap-3">
+                        <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: plan.trainingColor || '#3DC4DB' }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm">{plan.planNombre}</p>
+                          <p className="text-xs text-muted-foreground">{plan.trainingNombre} · {plan.modalidad}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {new Date(plan.fechaInicio).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })}
+                            {' – '}
+                            {new Date(plan.fechaFin).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </p>
+                          <p className="text-xs font-semibold text-primary mt-1">{formatCop(plan.precioCopAplicado)}</p>
+                        </div>
+                        <button
+                          onClick={() => confirmDeactivatePlan(plan.id, plan.planNombre)}
+                          disabled={deactivatePlan.isPending}
+                          title="Desactivar plan"
+                          className="size-8 rounded-lg text-red-400/70 hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0 disabled:opacity-50"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground italic">Sin plan asignado</p>
