@@ -6,7 +6,7 @@ import {
   ChevronLeft, Check, ToggleLeft, ToggleRight,
   User, Phone, Mail, CreditCard, Calendar, Weight, Ruler,
   Tag, Eye, EyeOff, Camera, Loader2, Trash2, Lock, Pencil,
-  FileText, ExternalLink,
+  FileText, ExternalLink, HeartPulse,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
@@ -22,6 +22,7 @@ interface ProfileUser {
   nombre: string;
   email: string;
   telefono?: string;
+  eps?: string | null;
   documento?: string;
   rol: string;
   activo: boolean;
@@ -788,6 +789,7 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
             <div className="rounded-2xl bg-card border border-border px-4">
               <Field label="Teléfono (login)" value={u.telefono} icon={Phone} userId={userId} fieldKey="telefono" type="tel" />
               <Field label="Documento" value={u.documento} icon={CreditCard} userId={userId} fieldKey="documento" />
+              <Field label="EPS" value={u.eps} icon={HeartPulse} userId={userId} fieldKey="eps" />
               <Field label="Correo electrónico" value={u.email} icon={Mail} userId={userId} fieldKey="email" type="email" />
               <Field label="Fecha de nacimiento" value={u.fechaNacimiento ?? null} icon={Calendar} userId={userId} fieldKey="fechaNacimiento" type="date" />
               <Field label="Género" value={u.genero} icon={User} userId={userId} fieldKey="genero" />
@@ -822,6 +824,7 @@ export function CreateUserScreen({ onClose, onSuccess }: { onClose: () => void; 
     documento: '',
     email: '',
     telefono: '',
+    eps: '',
     fechaNacimiento: '',
     password: '',
     tipo: 'user' as 'user' | 'coach' | 'menor',
@@ -860,6 +863,7 @@ export function CreateUserScreen({ onClose, onSuccess }: { onClose: () => void; 
           relacionAcudiente: form.relacionAcudiente,
           ...(form.email && { email: form.email }),
           ...(form.telefono && { telefono: form.telefono }),
+          ...(form.eps && { eps: form.eps }),
           ...(form.fechaNacimiento && { fechaNacimiento: form.fechaNacimiento }),
           ...(form.password && { password: form.password }),
         });
@@ -873,6 +877,7 @@ export function CreateUserScreen({ onClose, onSuccess }: { onClose: () => void; 
         esMenor: false,
         ...(form.email && { email: form.email }),
         ...(form.telefono && { telefono: form.telefono }),
+        ...(form.eps && { eps: form.eps }),
         ...(form.fechaNacimiento && { fechaNacimiento: form.fechaNacimiento }),
         ...(form.password && { password: form.password }),
       });
@@ -936,6 +941,7 @@ export function CreateUserScreen({ onClose, onSuccess }: { onClose: () => void; 
             { key: 'documento', label: 'Documento de identidad *', type: 'text' },
             { key: 'email', label: 'Correo electrónico (opcional)', type: 'email' },
             { key: 'telefono', label: 'Teléfono', type: 'tel' },
+            { key: 'eps', label: 'EPS (opcional)', type: 'text' },
             { key: 'fechaNacimiento', label: 'Fecha de nacimiento', type: 'date' },
           ].map(({ key, label, type }) => (
             <div key={key}>

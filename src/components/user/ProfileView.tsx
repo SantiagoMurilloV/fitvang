@@ -14,6 +14,7 @@ interface UserProfile {
   nombre: string;
   email: string;
   telefono?: string | null;
+  eps?: string | null;
   rol: string;
   avatarUrl?: string | null;
   fechaNacimiento?: string | null;
@@ -311,6 +312,12 @@ export function ProfileView() {
             placeholder="300 000 0000"
             type="tel"
             onSave={field('telefono')}
+          />
+          <EditableField
+            label="EPS"
+            value={u.eps ?? ''}
+            placeholder="Ej: Sura, Sanitas, Nueva EPS…"
+            onSave={field('eps')}
           />
           <EditableField
             label="Fecha de nacimiento"
