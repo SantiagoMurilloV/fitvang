@@ -6,7 +6,7 @@ import {
   ChevronLeft, Check, ToggleLeft, ToggleRight,
   User, Phone, Mail, CreditCard, Calendar, Weight, Ruler,
   Tag, Eye, EyeOff, Camera, Loader2, Trash2, Lock, Pencil,
-  FileText, ExternalLink, HeartPulse,
+  FileText, HeartPulse,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
@@ -14,6 +14,7 @@ import { useAvatarUpload } from '@/lib/useAvatarUpload';
 import { useInlineEdit } from '@/lib/useInlineEdit';
 import { formatCop } from '@/lib/utils';
 import { Button } from '@/components/shared/Button';
+import { TermsDocModal } from '@/components/admin/TermsDocModal';
 import Swal from 'sweetalert2';
 
 /* ─── Types ──────────────────────────────────────────────────────────── */
@@ -178,14 +179,15 @@ function NameField({ nombre, userId }: { nombre: string; userId: string }) {
 function TerminosRow({ userId, aceptadosAt, docUrl }: { userId: string; aceptadosAt?: string | null; docUrl?: string | null }) {
   const qc = useQueryClient();
   const aceptados = !!aceptadosAt;
+  const [verDoc, setVerDoc] = useState(false);
 
   const regenerar = useMutation({
     mutationFn: () => api.post<{ url: string }>(`/users/${userId}/regenerar-terminos`),
     onSuccess: () => {
-      toast.success('Documento generado');
+      toast.success('Copia archivada en Cloudinary');
       qc.invalidateQueries({ queryKey: ['user-ficha', userId] });
     },
-    onError: () => toast.error('No se pudo generar el documento. Revisa las credenciales de Cloudinary.'),
+    onError: () => toast.error('No se pudo archivar el documento. Revisa las credenciales de Cloudinary.'),
   });
 
   return (
@@ -203,30 +205,29 @@ function TerminosRow({ userId, aceptadosAt, docUrl }: { userId: string; aceptado
               {new Date(aceptadosAt!).toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })}
             </span>
           </p>
-          {docUrl ? (
-            <a
-              href={docUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-primary/15 border border-primary/30 text-primary text-sm font-semibold hover:bg-primary/25 active:scale-[0.98] transition"
-            >
-              <ExternalLink className="size-4" />
-              Ver documento firmado
-            </a>
-          ) : (
-            <>
-              <p className="text-xs text-muted-foreground">Aceptados, pero no se generó el documento.</p>
+          <button
+            type="button"
+            onClick={() => setVerDoc(true)}
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-primary/15 border border-primary/30 text-primary text-sm font-semibold hover:bg-primary/25 active:scale-[0.98] transition"
+          >
+            <FileText className="size-4" />
+            Ver documento firmado
+          </button>
+          {!docUrl && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">No hay copia archivada en Cloudinary (el visor la regenera al vuelo).</p>
               <button
                 type="button"
                 onClick={() => regenerar.mutate()}
                 disabled={regenerar.isPending}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-card border border-border text-sm font-semibold hover:bg-white/5 active:scale-[0.98] transition disabled:opacity-50"
+                className="inline-flex items-center gap-2 h-9 px-3 rounded-xl bg-card border border-border text-xs font-semibold hover:bg-white/5 active:scale-[0.98] transition disabled:opacity-50"
               >
-                {regenerar.isPending ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
-                Generar documento
+                {regenerar.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
+                Archivar copia
               </button>
-            </>
+            </div>
           )}
+          {verDoc && <TermsDocModal userId={userId} onClose={() => setVerDoc(false)} />}
         </>
       ) : (
         <p className="text-sm text-muted-foreground">Aún no ha aceptado los términos y condiciones.</p>
