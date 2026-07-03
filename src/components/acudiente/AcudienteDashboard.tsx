@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
 import { Card } from '@/components/shared/Card';
-import { CheckCircle2, XCircle, Clock, User } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, User, Flame, Trophy, Sprout, Medal, Zap, Crown, type LucideIcon } from 'lucide-react';
 
 interface Minor {
   menorId: string;
@@ -30,6 +30,23 @@ const RELACION_LABEL: Record<string, string> = {
   otro: 'Acudiente',
 };
 
+interface Scoring {
+  rachaActual: number;
+  rachaMaxima: number;
+  asistencias: number;
+  totalSesiones: number;
+  porcentaje: number;
+  nivel: string;
+}
+
+const NIVEL_INFO: Record<string, { Icon: LucideIcon; color: string; label: string }> = {
+  rookie: { Icon: Sprout, color: '#4ade80', label: 'Rookie' },
+  regular: { Icon: Medal, color: '#3DC4DB', label: 'Regular' },
+  constante: { Icon: Flame, color: '#facc15', label: 'Constante' },
+  elite: { Icon: Zap, color: '#f87171', label: 'Elite' },
+  leyenda: { Icon: Crown, color: '#fbbf24', label: 'Leyenda' },
+};
+
 function todaySpanish(): string {
   return new Date().toLocaleDateString('es-CO', {
     weekday: 'long',
@@ -43,6 +60,14 @@ function MinorCard({ minor }: { minor: Minor }) {
     queryKey: ['bookings-menor', minor.menorId],
     queryFn: () => api.get<{ bookings: Booking[] }>(`/bookings/user/${minor.menorId}`),
   });
+
+  // Análisis del menor: racha, asistencia del mes y nivel
+  const scoring = useQuery({
+    queryKey: ['scoring-menor', minor.menorId],
+    queryFn: () => api.get<Scoring>(`/stats/${minor.menorId}/scoring`),
+  });
+  const s = scoring.data;
+  const nivel = s ? (NIVEL_INFO[s.nivel] ?? NIVEL_INFO.rookie) : null;
 
   const upcoming = (bookings.data?.bookings ?? [])
     .filter((b) => b.estado === 'activa')
@@ -70,11 +95,43 @@ function MinorCard({ minor }: { minor: Minor }) {
             {initials}
           </div>
         )}
-        <div>
-          <p className="font-bold text-base">{minor.nombre}</p>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-base truncate">{minor.nombre}</p>
           <p className="text-xs text-muted-foreground">{RELACION_LABEL[minor.relacion] ?? 'Menor'}</p>
         </div>
+        {nivel && (
+          <span
+            className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0"
+            style={{ color: nivel.color, borderColor: `${nivel.color}55`, background: `${nivel.color}1a` }}
+          >
+            <nivel.Icon className="size-3" /> {nivel.label}
+          </span>
+        )}
       </div>
+
+      {/* Análisis del menor */}
+      {s && (
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-xl bg-white/5 border border-border p-2.5 flex flex-col items-center">
+            <div className="flex items-center gap-1">
+              <Flame className="size-3.5 text-orange-400" />
+              <p className="text-base font-bold">{s.rachaActual}</p>
+            </div>
+            <p className="text-[9px] uppercase tracking-wider text-muted-foreground mt-0.5">Racha</p>
+          </div>
+          <div className="rounded-xl bg-white/5 border border-border p-2.5 flex flex-col items-center">
+            <p className="text-base font-bold">{s.porcentaje}%</p>
+            <p className="text-[9px] uppercase tracking-wider text-muted-foreground mt-0.5">Asistencia mes</p>
+          </div>
+          <div className="rounded-xl bg-white/5 border border-border p-2.5 flex flex-col items-center">
+            <div className="flex items-center gap-1">
+              <Trophy className="size-3.5 text-amber-400" />
+              <p className="text-base font-bold">{s.rachaMaxima}</p>
+            </div>
+            <p className="text-[9px] uppercase tracking-wider text-muted-foreground mt-0.5">Récord</p>
+          </div>
+        </div>
+      )}
 
       {/* Próximas clases del menor */}
       <div>

@@ -4,15 +4,15 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { X, Users2, ChevronLeft, ChevronRight, Clock, Pencil, Trash2 } from 'lucide-react';
+import { X, Users2, ChevronLeft, ChevronRight, Clock, Pencil, Trash2, Search, UserPlus } from 'lucide-react';
 import Swal from 'sweetalert2';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useUiAction } from '@/lib/ui-actions';
 import { Card } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
-interface Session {
+export interface Session {
   id: string;
   fecha: string;
   estado: 'programada' | 'cancelada' | 'finalizada';
@@ -26,7 +26,7 @@ interface Session {
   diaSemana: string;
 }
 
-interface Attendee {
+export interface Attendee {
   bookingId: string;
   userId: string;
   nombre: string;
@@ -41,12 +41,139 @@ const DIAS_SHORT: Record<string, string> = {
   viernes: 'Vie', sabado: 'Sáb', domingo: 'Dom',
 };
 
+/* ─── Agregar reserva (admin reserva a nombre de un usuario) ─────────── */
+interface PickUser {
+  id: string;
+  nombre: string;
+  documento: string;
+  rol: string;
+  esMenor: boolean;
+  activo: boolean;
+  avatarUrl?: string | null;
+}
+
+export function AddBookingSection({ session, attendeeIds }: { session: Session; attendeeIds: Set<string> }) {
+  const qc = useQueryClient();
+  const [q, setQ] = useState('');
+
+  const search = useQuery({
+    queryKey: ['booking-user-search', q],
+    queryFn: () => api.get<{ users: PickUser[] }>(`/users?q=${encodeURIComponent(q)}`),
+    enabled: q.trim().length >= 2,
+  });
+  // Solo clientes/menores activos que no estén ya inscritos en la clase
+  const candidates = (search.data?.users ?? []).filter(
+    (u) => u.rol === 'user' && u.activo !== false && !attendeeIds.has(u.id),
+  );
+
+  const add = useMutation({
+    mutationFn: (userId: string) =>
+      api.post<{ bookingId?: string; waitlisted?: boolean; posicion?: number }>('/bookings', {
+        sessionId: session.id,
+        userId,
+      }),
+    onSuccess: (res) => {
+      if (res.waitlisted) toast.success(`Clase llena: quedó en lista de espera (#${res.posicion})`);
+      else toast.success('Reserva creada');
+      setQ('');
+      qc.invalidateQueries({ queryKey: ['session-attendees', session.id] });
+      qc.invalidateQueries({ queryKey: ['sessions-week'] });
+    },
+    onError: (err) => {
+      const map: Record<string, string> = {
+        sin_plan_activo: 'El usuario no tiene plan activo.',
+        plan_no_cubre_training: 'Su plan no cubre este tipo de clase.',
+        plan_sin_sesiones: 'Su plan no tiene sesiones disponibles.',
+        ya_reservada: 'Ya tiene esta clase reservada.',
+        sesion_no_disponible: 'Esta sesión ya no está disponible.',
+      };
+      if (err instanceof ApiError) toast.error(map[err.data?.error] ?? err.data?.message ?? 'No se pudo crear la reserva.');
+      else toast.error('No se pudo crear la reserva.');
+    },
+  });
+
+  return (
+    <div className="p-4 border-t border-border shrink-0 space-y-2">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+        <UserPlus size={13} className="text-primary" /> Agregar reserva
+      </p>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por nombre o documento…"
+          className="w-full h-10 pl-10 pr-4 rounded-xl bg-background border border-border focus:border-primary focus:outline-none text-sm"
+        />
+      </div>
+      {q.trim().length >= 2 && (
+        <div className="max-h-40 overflow-y-auto rounded-xl border border-border divide-y divide-border/60">
+          {search.isLoading ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Buscando…</p>
+          ) : candidates.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Sin resultados.</p>
+          ) : (
+            candidates.map((u) => {
+              const initials = u.nombre.split(' ').map((s) => s[0]).slice(0, 2).join('');
+              return (
+                <button
+                  key={u.id}
+                  onClick={() => add.mutate(u.id)}
+                  disabled={add.isPending}
+                  className="w-full flex items-center gap-3 px-3 py-2 hover:bg-white/5 transition-colors text-left disabled:opacity-50"
+                >
+                  <div className="size-8 rounded-full bg-primary/20 grid place-items-center text-xs font-bold text-primary shrink-0 overflow-hidden">
+                    {u.avatarUrl ? <img src={u.avatarUrl} alt={u.nombre} className="size-full object-cover" /> : initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate">{u.nombre}{u.esMenor && <span className="text-[10px] text-muted-foreground ml-1.5">Menor</span>}</p>
+                    <p className="text-xs text-muted-foreground truncate">{u.documento}</p>
+                  </div>
+                  <UserPlus size={14} className="text-primary shrink-0" />
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Attendees Sheet ───────────────────────────────────────────────── */
 function AttendeesSheet({ session, onClose, onEdit, onDelete }: { session: Session; onClose: () => void; onEdit: () => void; onDelete: () => void }) {
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['session-attendees', session.id],
     queryFn: () => api.get<{ attendees: Attendee[] }>(`/classes/sessions/${session.id}/attendees`),
   });
+
+  const cancelBooking = useMutation({
+    mutationFn: (bookingId: string) => api.delete(`/bookings/${bookingId}`),
+    onSuccess: () => {
+      toast.success('Reserva cancelada');
+      qc.invalidateQueries({ queryKey: ['session-attendees', session.id] });
+      qc.invalidateQueries({ queryKey: ['sessions-week'] });
+    },
+    onError: () => toast.error('No se pudo cancelar la reserva.'),
+  });
+
+  async function confirmCancel(a: Attendee) {
+    const res = await Swal.fire({
+      title: '¿Cancelar reserva?',
+      text: `Se cancelará la reserva de ${a.nombre}.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, cancelar',
+      cancelButtonText: 'No',
+      background: '#0f0f11',
+      color: '#f8f8f8',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#2a2a2f',
+      reverseButtons: true,
+    });
+    if (res.isConfirmed) cancelBooking.mutate(a.bookingId);
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center" onClick={onClose}>
@@ -98,11 +225,29 @@ function AttendeesSheet({ session, onClose, onEdit, onDelete }: { session: Sessi
                   </div>
                   <p className="flex-1 text-sm font-medium">{a.nombre}</p>
                   <span className={`text-[10px] font-semibold uppercase ${statColor}`}>{a.estado}</span>
+                  {a.estado === 'activa' && session.estado === 'programada' && (
+                    <button
+                      onClick={() => confirmCancel(a)}
+                      disabled={cancelBooking.isPending}
+                      title="Cancelar reserva"
+                      className="size-8 rounded-full bg-red-500/10 text-red-400 grid place-items-center hover:bg-red-500/20 transition-colors disabled:opacity-50 shrink-0"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
                 </div>
               );
             })
           )}
         </div>
+
+        {/* Reservar a nombre de un usuario — solo clases aún programadas */}
+        {session.estado === 'programada' && (
+          <AddBookingSection
+            session={session}
+            attendeeIds={new Set((data?.attendees ?? []).filter((a) => a.estado !== 'no_asistio').map((a) => a.userId))}
+          />
+        )}
       </motion.div>
     </div>
   );

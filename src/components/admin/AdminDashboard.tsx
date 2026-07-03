@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
-import { Users2, Activity, DollarSign, BookOpen, Trophy, Radio, X, Send, Search, Check, Bell, Trash2, History, Flame, ChevronLeft, Sprout, Medal, Zap, Crown, type LucideIcon } from 'lucide-react';
+import { Users2, Activity, DollarSign, BookOpen, Trophy, Radio, X, Send, Search, Check, Bell, Trash2, History, Flame, ChevronLeft, Sprout, Medal, Zap, Crown, CalendarPlus, Wallet, type LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { formatCop } from '@/lib/utils';
@@ -699,11 +699,34 @@ export function AdminDashboard() {
             iconColor="bg-purple-500/10 text-purple-400"
             value={overview?.planesActivos ?? '—'}
             label="Planes activos"
+            onClick={() => { window.location.href = '/admin/planes-activos'; }}
           />
         </div>
 
-        {/* Accesos: progreso + envío, uno al lado del otro */}
+        {/* Accesos rápidos */}
         <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => { window.location.href = '/admin/reservar'; }}
+            className="rounded-2xl bg-emerald-500/10 border border-emerald-500/20 p-4 flex flex-col gap-2 text-left hover:bg-emerald-500/15 transition-colors"
+          >
+            <CalendarPlus className="size-5 text-emerald-400" />
+            <div>
+              <p className="text-sm font-semibold text-emerald-300 leading-tight">Hacer reserva</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">A nombre de un usuario</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => { window.location.href = '/admin/deudores'; }}
+            className="rounded-2xl bg-red-500/10 border border-red-500/20 p-4 flex flex-col gap-2 text-left hover:bg-red-500/15 transition-colors"
+          >
+            <Wallet className="size-5 text-red-400" />
+            <div>
+              <p className="text-sm font-semibold text-red-300 leading-tight">Deudores</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Usuarios con saldo pendiente</p>
+            </div>
+          </button>
+
           <button
             onClick={() => setShowProgress(true)}
             className="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4 flex flex-col gap-2 text-left hover:bg-amber-500/15 transition-colors"

@@ -6,7 +6,7 @@ import {
   ChevronLeft, Check, ToggleLeft, ToggleRight,
   User, Phone, Mail, CreditCard, Calendar, Weight, Ruler,
   Tag, Eye, EyeOff, Camera, Loader2, Trash2, Lock, Pencil,
-  FileText, HeartPulse,
+  FileText, HeartPulse, Search,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
@@ -839,28 +839,47 @@ export function CreateUserScreen({ onClose, onSuccess }: { onClose: () => void; 
   });
   const [showPwd, setShowPwd] = useState(false);
   const [showAcudientePwd, setShowAcudientePwd] = useState(false);
+  // Acudiente existente: en vez de crear uno nuevo, se busca y vincula un cliente
+  const [acudienteExistente, setAcudienteExistente] = useState(false);
+  const [acudienteQ, setAcudienteQ] = useState('');
+  const [acudienteSel, setAcudienteSel] = useState<{ id: string; nombre: string; documento: string; avatarUrl?: string | null } | null>(null);
+
+  const acudienteSearch = useQuery({
+    queryKey: ['acudiente-search', acudienteQ],
+    queryFn: () => api.get<{ users: { id: string; nombre: string; documento: string; rol: string; esMenor: boolean; avatarUrl?: string | null }[] }>(`/users?q=${encodeURIComponent(acudienteQ)}`),
+    enabled: form.tipo === 'menor' && acudienteExistente && acudienteQ.trim().length >= 2,
+  });
+  // Solo clientes adultos pueden ser acudientes (no menores, no staff)
+  const acudienteResults = (acudienteSearch.data?.users ?? []).filter((u) => u.rol === 'user' && !u.esMenor);
 
   const create = useMutation({
     mutationFn: async () => {
       if (form.tipo === 'menor') {
-        // 1. Crear acudiente primero
-        const acudienteRes = await api.post<{ user: { id: string }; passwordTemporal?: string }>('/users', {
-          nombreCompleto: form.acudienteNombre,
-          documento: form.acudienteDocumento,
-          rol: 'user',
-          esMenor: false,
-          esAcudiente: true,
-          ...(form.acudienteTelefono && { telefono: form.acudienteTelefono }),
-          ...(form.acudienteEmail && { email: form.acudienteEmail }),
-          ...(form.acudientePassword && { password: form.acudientePassword }),
-        });
+        // 1. Resolver acudiente: cliente existente seleccionado, o crear uno nuevo
+        let acudienteId: string;
+        let acudienteRes: { user: { id: string }; passwordTemporal?: string } | null = null;
+        if (acudienteExistente && acudienteSel) {
+          acudienteId = acudienteSel.id;
+        } else {
+          acudienteRes = await api.post<{ user: { id: string }; passwordTemporal?: string }>('/users', {
+            nombreCompleto: form.acudienteNombre,
+            documento: form.acudienteDocumento,
+            rol: 'user',
+            esMenor: false,
+            esAcudiente: true,
+            ...(form.acudienteTelefono && { telefono: form.acudienteTelefono }),
+            ...(form.acudienteEmail && { email: form.acudienteEmail }),
+            ...(form.acudientePassword && { password: form.acudientePassword }),
+          });
+          acudienteId = acudienteRes.user.id;
+        }
         // 2. Crear menor vinculado
-        await api.post('/users', {
+        const menorRes = await api.post<{ user: { id: string }; passwordTemporal?: string }>('/users', {
           nombreCompleto: form.nombreCompleto,
           documento: form.documento,
           rol: 'user',
           esMenor: true,
-          acudienteId: acudienteRes.user.id,
+          acudienteId,
           relacionAcudiente: form.relacionAcudiente,
           ...(form.email && { email: form.email }),
           ...(form.telefono && { telefono: form.telefono }),
@@ -868,7 +887,7 @@ export function CreateUserScreen({ onClose, onSuccess }: { onClose: () => void; 
           ...(form.fechaNacimiento && { fechaNacimiento: form.fechaNacimiento }),
           ...(form.password && { password: form.password }),
         });
-        return acudienteRes;
+        return acudienteRes ?? menorRes;
       }
       // Cliente o coach
       return api.post<{ user: { id: string }; passwordTemporal?: string }>('/users', {
@@ -889,7 +908,9 @@ export function CreateUserScreen({ onClose, onSuccess }: { onClose: () => void; 
 
   const valid = form.tipo === 'menor'
     ? form.nombreCompleto.trim().length > 2 && form.documento.trim().length > 3
-      && form.acudienteNombre.trim().length > 2 && form.acudienteDocumento.trim().length > 3
+      && (acudienteExistente
+        ? !!acudienteSel
+        : form.acudienteNombre.trim().length > 2 && form.acudienteDocumento.trim().length > 3)
     : form.nombreCompleto.trim().length > 2 && form.documento.trim().length > 3;
 
   return (
@@ -922,7 +943,12 @@ export function CreateUserScreen({ onClose, onSuccess }: { onClose: () => void; 
             {(['user', 'coach', 'menor'] as const).map((t) => (
               <button
                 key={t}
-                onClick={() => setForm({ ...form, tipo: t, acudienteNombre: '', acudienteDocumento: '' })}
+                onClick={() => {
+                  setForm({ ...form, tipo: t, acudienteNombre: '', acudienteDocumento: '' });
+                  setAcudienteExistente(false);
+                  setAcudienteSel(null);
+                  setAcudienteQ('');
+                }}
                 className={`py-2.5 rounded-xl border text-sm font-medium transition-all ${
                   form.tipo === t ? 'bg-primary/15 border-primary text-primary' : 'border-border text-muted-foreground hover:border-primary/40'
                 }`}
@@ -961,6 +987,98 @@ export function CreateUserScreen({ onClose, onSuccess }: { onClose: () => void; 
         {form.tipo === 'menor' && (
           <div className="rounded-2xl bg-card border border-amber-500/20 p-4 space-y-3">
             <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Datos del acudiente *</p>
+
+            {/* ¿Nuevo o ya es cliente de Fitvang? */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => { setAcudienteExistente(false); setAcudienteSel(null); setAcudienteQ(''); }}
+                className={`h-10 rounded-xl text-sm font-medium border transition-colors ${
+                  !acudienteExistente
+                    ? 'bg-amber-500/15 border-amber-500 text-amber-300'
+                    : 'bg-background border-border text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Nuevo acudiente
+              </button>
+              <button
+                type="button"
+                onClick={() => setAcudienteExistente(true)}
+                className={`h-10 rounded-xl text-sm font-medium border transition-colors ${
+                  acudienteExistente
+                    ? 'bg-amber-500/15 border-amber-500 text-amber-300'
+                    : 'bg-background border-border text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Ya es cliente
+              </button>
+            </div>
+
+            {acudienteExistente ? (
+              <div className="space-y-2">
+                {acudienteSel ? (
+                  <div className="flex items-center gap-3 rounded-xl bg-background border border-amber-500/40 px-3 py-2.5">
+                    <div className="size-9 rounded-full bg-amber-500/15 grid place-items-center text-xs font-bold text-amber-300 shrink-0 overflow-hidden">
+                      {acudienteSel.avatarUrl
+                        ? <img src={acudienteSel.avatarUrl} alt={acudienteSel.nombre} className="size-full object-cover" />
+                        : acudienteSel.nombre.split(' ').map((s) => s[0]).slice(0, 2).join('')}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{acudienteSel.nombre}</p>
+                      <p className="text-xs text-muted-foreground truncate">{acudienteSel.documento}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAcudienteSel(null)}
+                      className="text-xs font-medium text-muted-foreground hover:text-foreground shrink-0"
+                    >
+                      Cambiar
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                      <input
+                        value={acudienteQ}
+                        onChange={(e) => setAcudienteQ(e.target.value)}
+                        placeholder="Buscar por nombre o documento…"
+                        className="w-full h-11 pl-10 pr-4 rounded-xl bg-background border border-border focus:border-primary focus:outline-none text-sm"
+                      />
+                    </div>
+                    {acudienteQ.trim().length >= 2 && (
+                      <div className="max-h-48 overflow-y-auto rounded-xl border border-border divide-y divide-border/60">
+                        {acudienteSearch.isLoading ? (
+                          <p className="text-sm text-muted-foreground text-center py-6">Buscando…</p>
+                        ) : acudienteResults.length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-center py-6">No se encontraron clientes.</p>
+                        ) : (
+                          acudienteResults.map((u) => (
+                            <button
+                              key={u.id}
+                              type="button"
+                              onClick={() => setAcudienteSel({ id: u.id, nombre: u.nombre, documento: u.documento, avatarUrl: u.avatarUrl })}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
+                            >
+                              <div className="size-8 rounded-full bg-primary/20 grid place-items-center text-xs font-bold text-primary shrink-0 overflow-hidden">
+                                {u.avatarUrl
+                                  ? <img src={u.avatarUrl} alt={u.nombre} className="size-full object-cover" />
+                                  : u.nombre.split(' ').map((s) => s[0]).slice(0, 2).join('')}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm truncate">{u.nombre}</p>
+                                <p className="text-xs text-muted-foreground truncate">{u.documento}</p>
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : (
+              <>
             {[
               { key: 'acudienteNombre', label: 'Nombre completo *', type: 'text' },
               { key: 'acudienteDocumento', label: 'Documento *', type: 'text' },
@@ -992,6 +1110,8 @@ export function CreateUserScreen({ onClose, onSuccess }: { onClose: () => void; 
                 </button>
               </div>
             </div>
+              </>
+            )}
             <div>
               <label className="text-xs text-muted-foreground">Relación con el menor</label>
               <select

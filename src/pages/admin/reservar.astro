@@ -1,0 +1,10 @@
+---
+import RootLayout from '@/layouts/RootLayout.astro';
+import Entry from '@/components/entry';
+import { guardArea } from '@/lib/requireAuth';
+const __guard = await guardArea(Astro.request, 'admin');
+if (__guard.redirect) return Astro.redirect(__guard.redirect);
+---
+<RootLayout title="Fitvang — Hacer reserva">
+  <Entry client:load view="admin/reservar" user={__guard.user} />
+</RootLayout>

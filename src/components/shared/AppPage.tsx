@@ -202,6 +202,10 @@ function getHeaderConfig(variant: string): HeaderConfig {
       action: { label: 'Nueva clase', action: 'crear-clase' },
     };
     if (path.startsWith('/admin/pagos')) return { title: 'Pagos', action: { label: 'Análisis financiero', action: 'ir-finanzas', icon: 'chart' } };
+    // OJO: debe ir antes de '/admin/planes' — startsWith también matchearía esta ruta
+    if (path.startsWith('/admin/planes-activos')) return { title: 'Planes activos', back: '/admin' };
+    if (path.startsWith('/admin/reservar')) return { title: 'Hacer reserva', back: '/admin' };
+    if (path.startsWith('/admin/deudores')) return { title: 'Deudores', back: '/admin' };
     if (path.startsWith('/admin/planes')) return {
       title: 'Planes',
       action: { label: 'Nuevo', action: 'crear-plan' },
@@ -222,7 +226,7 @@ function getHeaderConfig(variant: string): HeaderConfig {
   // Rutas acudiente
   if (variant === 'acudiente') {
     if (path === '/acudiente') return { title: '' };
-    if (path.startsWith('/acudiente/horarios')) return { title: 'Horarios' };
+    if (path.startsWith('/acudiente/horarios')) return { title: 'Horarios', action: { label: 'Reservas', action: 'editar-reservas', icon: 'calendar' } };
     if (path.startsWith('/acudiente/perfil')) return { title: 'Perfil' };
   }
 

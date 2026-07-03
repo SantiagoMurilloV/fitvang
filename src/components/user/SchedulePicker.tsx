@@ -4,12 +4,13 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { addDays, format, startOfWeek } from 'date-fns';
-import { ChevronLeft, ChevronRight, Check, X, Clock, Users, Pencil, Trash2, CalendarClock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, X, Clock, Users, Pencil, Trash2, CalendarClock, Wallet } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { api, ApiError } from '@/lib/api';
 import { Button } from '@/components/shared/Button';
+import { useAuth } from '@/lib/auth-store';
 import { useUiAction } from '@/lib/ui-actions';
-import { cn } from '@/lib/utils';
+import { cn, formatCop } from '@/lib/utils';
 
 interface SessionRow {
   id: string;
@@ -37,23 +38,11 @@ interface BookingRow {
   trainingColor: string;
 }
 
-type FilterKey = 'todos' | 'funcional' | 'futbol' | 'kids';
-
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'todos', label: 'Todos' },
-  { key: 'funcional', label: 'Funcional' },
-  { key: 'futbol', label: 'Fútbol' },
-  { key: 'kids', label: 'Kids' },
-];
-
-function matchesFilter(s: SessionRow, filter: FilterKey): boolean {
-  if (filter === 'todos') return true;
-  const slug = s.trainingSlug.toLowerCase();
-  const name = s.nombre.toLowerCase();
-  if (filter === 'funcional') return slug.includes('funcional') && !slug.includes('futbol') && !name.includes('kids');
-  if (filter === 'futbol') return slug.includes('futbol') || name.includes('fútbol') || name.includes('futbol');
-  if (filter === 'kids') return slug.includes('kids') || name.includes('kids');
-  return true;
+interface Minor {
+  menorId: string;
+  nombre: string;
+  avatarUrl?: string | null;
+  relacion: string;
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -70,13 +59,18 @@ function dateLong(fecha: string): string {
 
 const shortName = (s: SessionRow) => s.nombre.split('·')[0].trim();
 
-export function SchedulePicker() {
+// `acudiente`: el acudiente no es un cliente — ve los horarios del plan de su
+// hijo y las reservas que haga son para el hijo. El miembro solo ve las clases
+// que su plan activo cubre (el backend ya filtra /classes/sessions) y sin plan
+// activo no ve horarios.
+export function SchedulePicker({ acudiente = false }: { acudiente?: boolean }) {
   const qc = useQueryClient();
+  const user = useAuth((s) => s.user);
   const [weekOffset, setWeekOffset] = useState(0);
-  const [filter, setFilter] = useState<FilterKey>('todos');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<'clases' | 'reservas'>('clases');
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  const [menorSelId, setMenorSelId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayColRef = useRef<HTMLDivElement>(null);
 
@@ -85,15 +79,54 @@ export function SchedulePicker() {
   const to = format(addDays(monday, 6), 'yyyy-MM-dd');
   const today = format(new Date(), 'yyyy-MM-dd');
 
+  // Menores a cargo (solo acudiente). Todo el calendario gira alrededor del
+  // menor activo: sus horarios, su plan y sus reservas.
+  const menoresQ = useQuery({
+    queryKey: ['menores-me'],
+    queryFn: () => api.get<{ menores: Minor[] }>(`/users/${user?.id}/menores`),
+    enabled: acudiente && !!user?.id,
+  });
+  const menores = menoresQ.data?.menores ?? [];
+  const menorActivo = menores.find((m) => m.menorId === menorSelId) ?? menores[0] ?? null;
+  const menorId = menorActivo?.menorId ?? null;
+
   const sessions = useQuery({
-    queryKey: ['sessions', from, to],
-    queryFn: () => api.get<{ sessions: SessionRow[] }>(`/classes/sessions?from=${from}&to=${to}`),
+    queryKey: ['sessions', from, to, acudiente ? menorId : 'me'],
+    queryFn: () =>
+      api.get<{ sessions: SessionRow[] }>(
+        `/classes/sessions?from=${from}&to=${to}${acudiente && menorId ? `&paraUsuario=${menorId}` : ''}`,
+      ),
+    enabled: !acudiente || !!menorId,
   });
 
   const myBookings = useQuery({
-    queryKey: ['bookings-me'],
-    queryFn: () => api.get<{ bookings: BookingRow[] }>('/bookings/me'),
+    queryKey: acudiente ? ['bookings-menor', menorId] : ['bookings-me'],
+    queryFn: () =>
+      api.get<{ bookings: BookingRow[] }>(acudiente ? `/bookings/user/${menorId}` : '/bookings/me'),
+    enabled: !acudiente || !!menorId,
   });
+
+  // Plan activo del titular (miembro → el propio; acudiente → el del menor)
+  const myPlans = useQuery({
+    queryKey: ['plan-me'],
+    queryFn: () => api.get<{ plans: { id: string }[] }>('/plans/me'),
+    enabled: !acudiente,
+  });
+  const menorPlans = useQuery({
+    queryKey: ['plans-user', menorId],
+    queryFn: () => api.get<{ plans: { id: string }[] }>(`/plans/user/${menorId}`),
+    enabled: acudiente && !!menorId,
+  });
+
+  // Saldo pendiente del titular (miembro → el propio; acudiente → el del menor).
+  // Con deuda no se muestran los horarios: primero ponerse al día.
+  const titularId = acudiente ? menorId : user?.id ?? null;
+  const pendiente = useQuery({
+    queryKey: ['saldo-pendiente', titularId],
+    queryFn: () => api.get<{ saldoPendienteCop: number; pendientes: number }>(`/payments/pendiente/${titularId}`),
+    enabled: !!titularId,
+  });
+  const saldoPendiente = pendiente.data?.saldoPendienteCop ?? 0;
 
   const reservedSet = new Set(
     (myBookings.data?.bookings ?? [])
@@ -101,25 +134,32 @@ export function SchedulePicker() {
       .map((b) => b.sessionId),
   );
 
+  function invalidateBookings() {
+    qc.invalidateQueries({ queryKey: ['bookings-me'] });
+    qc.invalidateQueries({ queryKey: ['bookings-menor'] });
+    qc.invalidateQueries({ queryKey: ['sessions'] });
+  }
+
   const reserve = useMutation({
-    mutationFn: (sessionId: string) => api.post('/bookings', { sessionId }),
+    mutationFn: (sessionId: string) =>
+      api.post('/bookings', { sessionId, ...(acudiente && menorId ? { userId: menorId } : {}) }),
     onSuccess: () => {
       toast.success('Reservado');
-      qc.invalidateQueries({ queryKey: ['bookings-me'] });
-      qc.invalidateQueries({ queryKey: ['sessions'] });
+      invalidateBookings();
       setSelectedId(null);
     },
     onError: (err) => {
       const map: Record<string, string> = {
-        sin_plan_activo: 'No tienes plan activo.',
-        plan_no_cubre_training: 'Tu plan no cubre este tipo de clase.',
+        sin_plan_activo: acudiente ? 'El menor no tiene plan activo.' : 'No tienes plan activo.',
+        plan_no_cubre_training: acudiente ? 'El plan del menor no cubre este tipo de clase.' : 'Tu plan no cubre este tipo de clase.',
         kids_solo_por_admin: 'Las clases Kids se inscriben con el admin.',
-        ya_reservada: 'Ya tienes esta clase reservada.',
+        ya_reservada: acudiente ? 'El menor ya tiene esta clase reservada.' : 'Ya tienes esta clase reservada.',
         sesion_no_disponible: 'Esta sesión ya no está disponible.',
         sesion_no_encontrada: 'Esta sesión ya no existe.',
         muy_tarde_para_reservar: 'Ya es muy tarde: reserva con al menos 30 min de anticipación.',
         horario_restringido: 'No puedes reservar entre las 11 PM y las 6 AM.',
-        plan_sin_sesiones: 'Tu plan no tiene sesiones disponibles.',
+        plan_sin_sesiones: acudiente ? 'El plan del menor no tiene sesiones disponibles.' : 'Tu plan no tiene sesiones disponibles.',
+        saldo_pendiente: 'Hay un saldo pendiente. Ponte al día con los pagos para seguir entrenando.',
       };
       if (err instanceof ApiError) {
         toast.error(map[err.data?.error] ?? err.data?.message ?? 'No se pudo reservar.');
@@ -133,8 +173,7 @@ export function SchedulePicker() {
     mutationFn: (bookingId: string) => api.delete(`/bookings/${bookingId}`),
     onSuccess: () => {
       toast.success('Reserva cancelada');
-      qc.invalidateQueries({ queryKey: ['bookings-me'] });
-      qc.invalidateQueries({ queryKey: ['sessions'] });
+      invalidateBookings();
     },
     onError: () => toast.error('No se pudo cancelar la reserva.'),
   });
@@ -144,22 +183,22 @@ export function SchedulePicker() {
       api.put(`/bookings/${vars.bookingId}`, { newSessionId: vars.newSessionId }),
     onSuccess: () => {
       toast.success('Reserva reagendada');
-      qc.invalidateQueries({ queryKey: ['bookings-me'] });
-      qc.invalidateQueries({ queryKey: ['sessions'] });
+      invalidateBookings();
       setReschedulingId(null);
       setSelectedId(null);
       setMode('reservas');
     },
     onError: (err) => {
       const map: Record<string, string> = {
-        sin_plan_activo: 'No tienes plan activo.',
-        plan_no_cubre_training: 'Tu plan no cubre este tipo de clase.',
-        ya_reservada: 'Ya tienes esa clase reservada.',
+        sin_plan_activo: acudiente ? 'El menor no tiene plan activo.' : 'No tienes plan activo.',
+        plan_no_cubre_training: acudiente ? 'El plan del menor no cubre este tipo de clase.' : 'Tu plan no cubre este tipo de clase.',
+        ya_reservada: acudiente ? 'El menor ya tiene esa clase reservada.' : 'Ya tienes esa clase reservada.',
         sesion_llena: 'La clase elegida está llena.',
         misma_sesion: 'Es la misma clase de tu reserva.',
         muy_tarde_para_editar: 'Solo puedes reagendar con al menos 1 hora de anticipación.',
         muy_tarde_para_reservar: 'La nueva clase debe ser con al menos 30 min de anticipación.',
         sesion_no_disponible: 'Esa clase ya no está disponible.',
+        saldo_pendiente: 'Hay un saldo pendiente. Ponte al día con los pagos para seguir entrenando.',
       };
       if (err instanceof ApiError) toast.error(map[err.data?.error] ?? err.data?.message ?? 'No se pudo reagendar.');
       else toast.error('No se pudo reagendar.');
@@ -191,7 +230,6 @@ export function SchedulePicker() {
   }
 
   const allSessions = sessions.data?.sessions ?? [];
-  const filtered = allSessions.filter((s) => matchesFilter(s, filter));
 
   // Días de la semana (lun → dom) como columnas
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -200,11 +238,11 @@ export function SchedulePicker() {
   });
 
   // Horas presentes esta semana → filas
-  const times = Array.from(new Set(filtered.map((s) => s.horaInicio.slice(0, 5)))).sort();
+  const times = Array.from(new Set(allSessions.map((s) => s.horaInicio.slice(0, 5)))).sort();
 
   // Mapa celda → sesiones (puede haber varias clases a la misma hora/día)
   const cellMap = new Map<string, SessionRow[]>();
-  for (const s of filtered) {
+  for (const s of allSessions) {
     const key = `${s.fecha}|${s.horaInicio.slice(0, 5)}`;
     const arr = cellMap.get(key) ?? [];
     arr.push(s);
@@ -222,12 +260,140 @@ export function SchedulePicker() {
     sc.scrollLeft = tc.offsetLeft - sc.clientWidth / 2 + tc.clientWidth / 2;
   }, [weekOffset, times.length, sessions.dataUpdatedAt]);
 
+  // Miembro sin plan activo o con saldo pendiente → no ve horarios (los hooks
+  // ya corrieron; es seguro retornar aquí).
+  if (!acudiente) {
+    if (myPlans.isLoading || pendiente.isLoading) {
+      return <div className="rounded-2xl bg-card border border-border p-4 animate-pulse h-72" />;
+    }
+    if (saldoPendiente > 0) {
+      return (
+        <div className="flex flex-col items-center text-center gap-3 py-16 px-6">
+          <div className="size-14 rounded-full bg-amber-500/10 border border-amber-500/30 grid place-items-center">
+            <Wallet className="size-6 text-amber-400" />
+          </div>
+          <p className="font-semibold">Ponte al día</p>
+          <p className="text-sm text-muted-foreground max-w-xs">
+            Tienes un saldo pendiente de <span className="font-semibold text-amber-400">{formatCop(saldoPendiente)}</span>.
+            Ponte al día con tus pagos para que puedas seguir entrenando.
+          </p>
+          <a
+            href="/app/pagos"
+            className="mt-2 px-5 h-10 rounded-full bg-primary text-primary-foreground text-sm font-semibold flex items-center hover:bg-primary/90 transition-colors"
+          >
+            Ir a pagos
+          </a>
+        </div>
+      );
+    }
+    if ((myPlans.data?.plans ?? []).length === 0) {
+      return (
+        <div className="flex flex-col items-center text-center gap-3 py-16 px-6">
+          <div className="size-14 rounded-full bg-card border border-border grid place-items-center">
+            <CalendarClock className="size-6 text-muted-foreground" />
+          </div>
+          <p className="font-semibold">No puedes ver los horarios</p>
+          <p className="text-sm text-muted-foreground max-w-xs">
+            No tienes ningún plan activo. Comunícate con el club para activar tu plan y reservar clases.
+          </p>
+        </div>
+      );
+    }
+  }
+
+  // Acudiente: sin menores vinculados no hay nada que mostrar.
+  if (acudiente) {
+    if (menoresQ.isLoading || (!!menorId && (menorPlans.isLoading || pendiente.isLoading))) {
+      return <div className="rounded-2xl bg-card border border-border p-4 animate-pulse h-72" />;
+    }
+    if (menores.length === 0) {
+      return (
+        <div className="flex flex-col items-center text-center gap-3 py-16 px-6">
+          <div className="size-14 rounded-full bg-card border border-border grid place-items-center">
+            <CalendarClock className="size-6 text-muted-foreground" />
+          </div>
+          <p className="font-semibold">No tienes menores vinculados</p>
+          <p className="text-sm text-muted-foreground max-w-xs">
+            Habla con el admin del club para vincular a tu menor y ver sus horarios.
+          </p>
+        </div>
+      );
+    }
+  }
+
+  // El menor seleccionado no tiene plan activo → mensaje (el selector de hijo,
+  // si hay varios, sigue visible para poder cambiar).
+  const menorSinPlan = acudiente && !!menorId && !menorPlans.isLoading && (menorPlans.data?.plans ?? []).length === 0;
+
+  const menorChips = acudiente && menores.length > 1 && (
+    <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
+      {menores.map((m) => (
+        <button
+          key={m.menorId}
+          onClick={() => { setMenorSelId(m.menorId); setSelectedId(null); setReschedulingId(null); }}
+          className={cn(
+            'shrink-0 flex items-center gap-1.5 pl-1.5 pr-3.5 h-8 rounded-full text-xs font-medium transition-all',
+            m.menorId === menorId
+              ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/30'
+              : 'bg-card border border-border text-muted-foreground hover:border-primary hover:text-foreground',
+          )}
+        >
+          <span className="size-5 rounded-full bg-black/20 grid place-items-center text-[9px] font-bold overflow-hidden">
+            {m.avatarUrl
+              ? <img src={m.avatarUrl} alt={m.nombre} className="size-full object-cover" />
+              : m.nombre.split(' ').map((s) => s[0]).slice(0, 2).join('')}
+          </span>
+          {m.nombre.split(' ')[0]}
+        </button>
+      ))}
+    </div>
+  );
+
+  // El menor seleccionado tiene saldo pendiente → primero ponerse al día.
+  if (acudiente && !!menorId && saldoPendiente > 0) {
+    return (
+      <div className="space-y-4">
+        {menorChips}
+        <div className="flex flex-col items-center text-center gap-3 py-16 px-6">
+          <div className="size-14 rounded-full bg-amber-500/10 border border-amber-500/30 grid place-items-center">
+            <Wallet className="size-6 text-amber-400" />
+          </div>
+          <p className="font-semibold">Ponte al día</p>
+          <p className="text-sm text-muted-foreground max-w-xs">
+            {menorActivo?.nombre.split(' ')[0]} tiene un saldo pendiente de{' '}
+            <span className="font-semibold text-amber-400">{formatCop(saldoPendiente)}</span>.
+            Ponte al día con los pagos para que pueda seguir entrenando.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (menorSinPlan) {
+    return (
+      <div className="space-y-4">
+        {menorChips}
+        <div className="flex flex-col items-center text-center gap-3 py-16 px-6">
+          <div className="size-14 rounded-full bg-card border border-border grid place-items-center">
+            <CalendarClock className="size-6 text-muted-foreground" />
+          </div>
+          <p className="font-semibold">Sin plan activo</p>
+          <p className="text-sm text-muted-foreground max-w-xs">
+            {menorActivo?.nombre.split(' ')[0]} no tiene ningún plan activo. Comunícate con el club para activar su plan y reservar clases.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      {menorChips}
       {mode === 'reservas' && !reschedulingId ? (
         <ReservasList
           loading={myBookings.isLoading}
           bookings={(myBookings.data?.bookings ?? []).filter((b) => b.estado === 'activa')}
+          titular={acudiente ? menorActivo?.nombre.split(' ')[0] : undefined}
           onEdit={(b) => setReschedulingId(b.bookingId)}
           onDelete={confirmCancel}
           deleting={cancelBooking.isPending}
@@ -270,33 +436,11 @@ export function SchedulePicker() {
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className={cn(
-              'shrink-0 px-4 h-8 rounded-full text-xs font-medium transition-all',
-              filter === f.key
-                ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/30'
-                : 'bg-card border border-border text-muted-foreground hover:border-primary hover:text-foreground',
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
       {/* Cuadrícula semanal */}
       {sessions.isLoading ? (
         <div className="rounded-2xl bg-card border border-border p-4 animate-pulse h-72" />
       ) : times.length === 0 ? (
-        <p className="text-center text-muted-foreground py-12">
-          {filter !== 'todos'
-            ? `Sin clases de ${FILTERS.find((f) => f.key === filter)?.label} esta semana.`
-            : 'Sin clases en esta semana.'}
-        </p>
+        <p className="text-center text-muted-foreground py-12">Sin clases en esta semana.</p>
       ) : (
         <div ref={scrollRef} className="relative overflow-x-auto scrollbar-none">
           <div
@@ -420,6 +564,7 @@ export function SchedulePicker() {
         session={selected}
         reserved={selected ? reservedSet.has(selected.id) : false}
         rescheduling={!!reschedulingId}
+        reserveLabel={acudiente && menorActivo ? `Reservar para ${menorActivo.nombre.split(' ')[0]}` : 'Reservar'}
         reserving={reserve.isPending || reschedule.isPending}
         onReserve={(id) => reserve.mutate(id)}
         onReschedule={(newSessionId) => {
@@ -434,12 +579,14 @@ export function SchedulePicker() {
 function ReservasList({
   loading,
   bookings,
+  titular,
   onEdit,
   onDelete,
   deleting,
 }: {
   loading: boolean;
   bookings: BookingRow[];
+  titular?: string; // nombre del menor cuando el acudiente gestiona sus reservas
   onEdit: (b: BookingRow) => void;
   onDelete: (b: BookingRow) => void;
   deleting: boolean;
@@ -448,12 +595,18 @@ function ReservasList({
     return <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-20 rounded-2xl bg-card animate-pulse" />)}</div>;
   }
   if (bookings.length === 0) {
-    return <p className="text-center text-muted-foreground py-12 text-sm">No tienes reservas próximas.</p>;
+    return (
+      <p className="text-center text-muted-foreground py-12 text-sm">
+        {titular ? `${titular} no tiene reservas próximas.` : 'No tienes reservas próximas.'}
+      </p>
+    );
   }
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Reagenda o cancela tus reservas — solo hasta 1 hora antes de la clase.
+        {titular
+          ? `Reagenda o cancela las reservas de ${titular} — solo hasta 1 hora antes de la clase.`
+          : 'Reagenda o cancela tus reservas — solo hasta 1 hora antes de la clase.'}
       </p>
       {bookings.map((b) => {
         const startMs = new Date(`${b.fecha}T${b.horaInicio}`).getTime();
@@ -503,6 +656,7 @@ function DetailSheet({
   reserved,
   reserving,
   rescheduling,
+  reserveLabel = 'Reservar',
   onReserve,
   onReschedule,
   onClose,
@@ -511,6 +665,7 @@ function DetailSheet({
   reserved: boolean;
   reserving: boolean;
   rescheduling: boolean;
+  reserveLabel?: string;
   onReserve: (id: string) => void;
   onReschedule: (newSessionId: string) => void;
   onClose: () => void;
@@ -622,7 +777,7 @@ function DetailSheet({
                 </Button>
               ) : (
                 <Button size="lg" className="w-full" loading={reserving} onClick={() => onReserve(session.id)}>
-                  Reservar
+                  {reserveLabel}
                 </Button>
               )}
             </div>

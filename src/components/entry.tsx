@@ -19,6 +19,9 @@ import { PlansAdmin } from './admin/PlansAdmin';
 import { ConfigAdmin } from './admin/ConfigAdmin';
 import { SchedulerAdmin } from './admin/SchedulerAdmin';
 import { FinanzasAdmin } from './admin/FinanzasAdmin';
+import { ActivePlansAdmin } from './admin/ActivePlansAdmin';
+import { ReservarAdmin } from './admin/ReservarAdmin';
+import { DeudoresAdmin } from './admin/DeudoresAdmin';
 
 const VIEWS = {
   'user/home': { variant: 'app' as const, render: () => <UserDashboard /> },
@@ -28,7 +31,7 @@ const VIEWS = {
   'user/recorrido': { variant: 'app' as const, render: () => <JourneyView /> },
   'user/perfil': { variant: 'app' as const, render: () => <ProfileView /> },
   'acudiente/home': { variant: 'acudiente' as const, render: () => <AcudienteDashboard /> },
-  'acudiente/horarios': { variant: 'acudiente' as const, render: () => <SchedulePicker /> },
+  'acudiente/horarios': { variant: 'acudiente' as const, render: () => <SchedulePicker acudiente /> },
   'acudiente/perfil': { variant: 'acudiente' as const, render: () => <ProfileView /> },
   'coach/home': { variant: 'coach' as const, render: () => <CoachDashboard tab="hoy" /> },
   'coach/semana': { variant: 'coach' as const, render: () => <CoachDashboard tab="semana" /> },
@@ -42,6 +45,9 @@ const VIEWS = {
   'admin/config': { variant: 'admin' as const, render: () => <ConfigAdmin /> },
   'admin/scheduler': { variant: 'admin' as const, render: () => <SchedulerAdmin /> },
   'admin/finanzas': { variant: 'admin' as const, render: () => <FinanzasAdmin /> },
+  'admin/planes-activos': { variant: 'admin' as const, render: () => <ActivePlansAdmin /> },
+  'admin/reservar': { variant: 'admin' as const, render: () => <ReservarAdmin /> },
+  'admin/deudores': { variant: 'admin' as const, render: () => <DeudoresAdmin /> },
 } as const;
 
 export type ViewKey = keyof typeof VIEWS;
