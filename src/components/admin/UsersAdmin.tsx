@@ -75,15 +75,17 @@ function UserRow({ u, onSelect }: { u: UserRow; onSelect: () => void }) {
           <p className="font-semibold text-sm truncate">{u.nombre}</p>
           <p className="text-xs text-muted-foreground truncate">{u.email} · {u.documento}</p>
         </div>
-        {/* Cliente que además es acudiente → doble badge */}
-        {u.rol === 'user' && !u.esAcudiente && (u.menoresACargo ?? 0) > 0 && (
-          <span className="text-[10px] uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 bg-pink-500/15 text-pink-300 border-pink-500/30">
-            Acudiente
+        {/* Etiquetas apiladas: rol principal arriba, Acudiente debajo si aplica */}
+        <div className="flex flex-col items-end gap-0.5 shrink-0">
+          <span className={`text-[8px] uppercase tracking-wide border rounded-full px-1.5 py-px leading-tight ${ROL_BADGE[u.rol]}`}>
+            {ROL_LABEL[u.rol]}
           </span>
-        )}
-        <span className={`text-[10px] uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 ${ROL_BADGE[u.rol]}`}>
-          {ROL_LABEL[u.rol]}
-        </span>
+          {u.rol === 'user' && !u.esAcudiente && (u.menoresACargo ?? 0) > 0 && (
+            <span className="text-[8px] uppercase tracking-wide border rounded-full px-1.5 py-px leading-tight bg-pink-500/15 text-pink-300 border-pink-500/30">
+              Acudiente
+            </span>
+          )}
+        </div>
         <ChevronRight size={14} className="text-muted-foreground shrink-0" />
       </button>
     </Card>

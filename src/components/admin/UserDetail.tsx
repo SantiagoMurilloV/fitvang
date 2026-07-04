@@ -1007,15 +1007,16 @@ function RolesPanel({
     }
   }
 
+  // Una sola fila: los 4 chips reparten el ancho por igual, sin salto de línea
   const chip = (activo: boolean, bloqueado: boolean, color: string) =>
-    `px-3.5 h-9 rounded-full text-xs font-semibold border transition-colors ${
+    `flex-1 min-w-0 h-9 rounded-full text-xs font-semibold border transition-colors truncate px-2 ${
       activo ? color : 'bg-background border-border text-muted-foreground hover:text-foreground'
     } ${bloqueado ? 'opacity-90' : ''}`;
 
   return (
     <div className="rounded-2xl bg-card border border-border p-4 space-y-3">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Roles</p>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2">
         <button disabled={patch.isPending} onClick={toggleCliente} className={chip(esCliente, false, 'bg-blue-500/15 text-blue-300 border-blue-500/40')}>
           Cliente
         </button>
