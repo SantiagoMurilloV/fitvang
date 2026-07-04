@@ -49,7 +49,16 @@ export async function guardArea(request: Request, area: Area): Promise<GuardResu
     return { redirect: `/?next=${encodeURIComponent(url.pathname)}` };
   }
   // El usuario solo puede estar en SU área; en cualquier otra se le manda a su home.
+  // Excepciones (doble perfil, cambian de espacio con el switch del header):
+  //  - cliente que también es acudiente (menores vinculados) → además /acudiente
+  //  - admin que también es coach (fila activa en coaches) → además /coach
   const home = areaHome(user);
-  if (home !== AREA_PATH[area]) return { redirect: home };
+  const esClienteAcudiente = user.rol === 'user' && !user.esAcudiente && !!user.tieneMenores;
+  const esAdminCoach = user.rol === 'super_admin' && !!user.esCoach;
+  const permitida =
+    home === AREA_PATH[area] ||
+    (esClienteAcudiente && area === 'acudiente') ||
+    (esAdminCoach && area === 'coach');
+  if (!permitida) return { redirect: home };
   return { user };
 }

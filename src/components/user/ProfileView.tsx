@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
-import { Camera, Edit2, Check, X, LogOut, Trash2 } from 'lucide-react';
+import { Camera, Edit2, Check, X, LogOut, Trash2, HeartHandshake } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAvatarUpload } from '@/lib/useAvatarUpload';
 import { useInlineEdit } from '@/lib/useInlineEdit';
@@ -42,6 +42,20 @@ const GENERO_LABEL: Record<string, string> = {
   otro: 'Otro',
   prefiero_no_decir: 'Prefiero no decir',
 };
+
+const RELACION_LABEL: Record<string, string> = {
+  padre: 'Padre',
+  madre: 'Madre',
+  tutor: 'Tutor/a',
+  otro: 'Acudiente',
+};
+
+interface MenorACargo {
+  menorId: string;
+  nombre: string;
+  avatarUrl?: string | null;
+  relacion: string;
+}
 
 function AvatarBlock({ profile, onAvatarChange, onNameSave }: {
   profile: UserProfile;
@@ -213,6 +227,16 @@ export function ProfileView() {
     queryFn: () => api.get<MyPlan>('/plans/me'),
   });
 
+  // Menores a cargo: se muestran tanto para el acudiente puro como para el
+  // cliente que además es acudiente (vínculo en guardians).
+  const profileId = profile.data?.user?.id;
+  const menoresQ = useQuery({
+    queryKey: ['menores-me'],
+    queryFn: () => api.get<{ menores: MenorACargo[] }>(`/users/${profileId}/menores`),
+    enabled: !!profileId && !profile.data?.user?.esMenor,
+  });
+  const menores = menoresQ.data?.menores ?? [];
+
   const patch = useMutation({
     mutationFn: (data: Record<string, unknown>) => api.patch('/users/me', data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['my-profile'] }),
@@ -292,6 +316,31 @@ export function ProfileView() {
                 {p.sesionesUsadas} / {p.sesionesTotales} sesiones usadas
               </p>
             )}
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Acudiente de — menores vinculados */}
+      {menores.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.07 }}>
+          <Card className="space-y-3">
+            <p className="text-xs uppercase tracking-wider text-pink-400 font-semibold flex items-center gap-1.5">
+              <HeartHandshake className="size-3.5" /> Acudiente de
+            </p>
+            {menores.map((m) => {
+              const ini = m.nombre.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+              return (
+                <div key={m.menorId} className="flex items-center gap-3">
+                  <div className="size-9 rounded-full bg-pink-500/10 border border-pink-500/20 grid place-items-center text-xs font-bold text-pink-300 shrink-0 overflow-hidden">
+                    {m.avatarUrl ? <img src={m.avatarUrl} alt={m.nombre} className="size-full object-cover" /> : ini}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{m.nombre}</p>
+                    <p className="text-xs text-muted-foreground">{RELACION_LABEL[m.relacion] ?? 'Acudiente'}</p>
+                  </div>
+                </div>
+              );
+            })}
           </Card>
         </motion.div>
       )}

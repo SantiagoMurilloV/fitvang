@@ -265,6 +265,7 @@ interface PickUser {
   avatarUrl?: string | null;
   rol: 'super_admin' | 'coach' | 'user';
   esAcudiente?: boolean;
+  menoresACargo?: number;
   activo?: boolean;
 }
 
@@ -299,7 +300,8 @@ function userType(u: PickUser): UserType {
 
 function inAudience(u: PickUser, key: AudienceKey): boolean {
   if (key === 'coaches') return u.rol === 'coach';
-  if (key === 'acudientes') return u.rol === 'user' && !!u.esAcudiente;
+  // Acudiente = flag esAcudiente O cliente con menores vinculados (igual que el backend)
+  if (key === 'acudientes') return u.rol === 'user' && (!!u.esAcudiente || (u.menoresACargo ?? 0) > 0);
   return u.rol === 'user' && !u.esAcudiente; // miembros
 }
 
@@ -333,7 +335,8 @@ function SendNotificationModal({ onClose }: { onClose: () => void }) {
   const users = (usersQ.data?.users ?? []).filter((u) => u.activo !== false);
 
   const audienceCount = (key: AudienceKey) => users.filter((u) => inAudience(u, key)).length;
-  const allCount = [...audiences].reduce((sum, k) => sum + audienceCount(k), 0);
+  // Usuarios únicos: un cliente-acudiente matchea dos audiencias pero recibe una sola notificación
+  const allCount = users.filter((u) => [...audiences].some((k) => inAudience(u, k))).length;
 
   const toggleAudience = (key: AudienceKey) =>
     setAudiences((prev) => {

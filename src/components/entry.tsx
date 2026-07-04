@@ -82,8 +82,16 @@ export default function Entry({ view, user: ssrUser }: { view: ViewKey; user?: S
       // Si el usuario aterriza en un área que no es la suya (p.ej. super_admin
       // entrando por el start_url del PWA o un deep-link), se le manda a su home.
       // Así un super_admin NUNCA queda en el espacio de cliente.
+      // Excepciones de doble perfil: el cliente-acudiente también puede estar en
+      // /acudiente, y el admin-coach también en /coach.
       const home = homeFor(u);
-      if (home !== VARIANT_HOME[v.variant]) {
+      const esClienteAcudiente = u.rol === 'user' && !u.esAcudiente && !!u.tieneMenores;
+      const esAdminCoach = u.rol === 'super_admin' && !!u.esCoach;
+      const permitida =
+        home === VARIANT_HOME[v.variant] ||
+        (esClienteAcudiente && v.variant === 'acudiente') ||
+        (esAdminCoach && v.variant === 'coach');
+      if (!permitida) {
         window.location.replace(home);
         return;
       }

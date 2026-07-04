@@ -8,7 +8,7 @@ import {
   Tag, Eye, EyeOff, Camera, Loader2, Trash2, Lock, Pencil,
   FileText, HeartPulse, Search,
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
 import { useAvatarUpload } from '@/lib/useAvatarUpload';
 import { useInlineEdit } from '@/lib/useInlineEdit';
@@ -29,6 +29,7 @@ interface ProfileUser {
   activo: boolean;
   esMenor: boolean;
   esAcudiente?: boolean;
+  esCoach?: boolean;
   avatarUrl?: string | null;
   fechaNacimiento?: string | null;
   genero?: string | null;
@@ -584,11 +585,17 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
     queryFn: () => api.get<ScoringData>(`/stats/${userId}/scoring`),
   });
 
-  const { data: menoresData } = useQuery({
+  // También un cliente puede tener menores a cargo (vínculo en guardians sin
+  // el flag esAcudiente) — se consulta para cualquier usuario adulto rol 'user'.
+  const menoresQ = useQuery({
     queryKey: ['user-menores', userId],
     queryFn: () => api.get<{ menores: { menorId: string; nombre: string; avatarUrl?: string | null; relacion: string }[] }>(`/users/${userId}/menores`),
-    enabled: !!data?.user?.esAcudiente,
+    enabled: data?.user?.rol === 'user' && !data.user.esMenor,
   });
+  const menoresData = menoresQ.data;
+  // Mientras carga, menoresCount sería 0 y un click podría tomar una decisión
+  // equivocada (p.ej. tratar a un cliente-acudiente como cliente sin menores).
+  const menoresListos = !menoresQ.isLoading;
 
   const toggleActivo = useMutation({
     mutationFn: (activo: boolean) => api.patch(`/users/${userId}`, { activo }),
@@ -717,8 +724,9 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
               <div className="flex-1 min-w-0">
                 <NameField nombre={u.nombre} userId={userId} />
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {ROL_LABEL[u.rol] ?? u.rol}
+                  {u.rol === 'user' && u.esAcudiente && !u.esMenor ? 'Acudiente' : ROL_LABEL[u.rol] ?? u.rol}
                   {u.esMenor && ' · Menor'}
+                  {u.rol === 'user' && !u.esAcudiente && !u.esMenor && (menoresData?.menores.length ?? 0) > 0 && ' · Acudiente'}
                 </p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">
                   Desde {new Date(u.createdAt).toLocaleDateString('es-CO', { year: 'numeric', month: 'short' })}
@@ -726,8 +734,37 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
               </div>
             </div>
 
-            {/* Scoring — solo para clientes */}
-            {u.rol === 'user' && scoringData && (
+            {/* Roles — solo super_admin. Espera la carga de menores para no
+                decidir con menoresCount=0 falso. */}
+            {isSuperAdmin && !u.esMenor && menoresListos && (
+              <RolesPanel
+                u={u}
+                userId={userId}
+                menoresCount={menoresData?.menores.length ?? 0}
+                planesCount={planes.length}
+                esSelf={me?.id === userId}
+                onChanged={() => {
+                  refetch();
+                  qc.invalidateQueries({ queryKey: ['admin-users'] });
+                  qc.invalidateQueries({ queryKey: ['user-menores'] });
+                }}
+              />
+            )}
+
+            {/* Menor: el super_admin puede graduarlo a cliente cuando crezca */}
+            {isSuperAdmin && u.esMenor && (
+              <ConvertMenorPanel
+                userId={userId}
+                nombre={u.nombre}
+                onChanged={() => {
+                  refetch();
+                  qc.invalidateQueries({ queryKey: ['admin-users'] });
+                }}
+              />
+            )}
+
+            {/* Scoring — clientes y menores (no aplica al acudiente puro) */}
+            {u.rol === 'user' && (u.esMenor || !u.esAcudiente) && scoringData && (
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 p-3 text-center">
                   <p className="text-xl font-bold text-blue-400">{scoringData.asistenciasMes}</p>
@@ -744,8 +781,9 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
               </div>
             )}
 
-            {/* Plan activo — solo para clientes */}
-            {u.rol === 'user' && (
+            {/* Plan activo — clientes y menores. El acudiente puro NO tiene
+                planes: primero se le activa el rol Cliente en el panel de Roles. */}
+            {u.rol === 'user' && (u.esMenor || !u.esAcudiente) && (
               <div className="rounded-2xl bg-card border border-border p-4 space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Planes activos</p>
                 {planes.length > 0 ? (
@@ -761,8 +799,8 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
               </div>
             )}
 
-            {/* Menores a cargo — solo acudiente */}
-            {u.esAcudiente && (
+            {/* Menores a cargo — acudiente puro o cliente con menores vinculados */}
+            {(u.esAcudiente || (menoresData?.menores.length ?? 0) > 0) && (
               <div className="rounded-2xl bg-pink-500/5 border border-pink-500/20 p-4 space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-pink-400">Menores a cargo</p>
                 {menoresData?.menores.length ? (
@@ -815,6 +853,225 @@ export function UserDetail({ userId, onClose }: { userId: string; onClose: () =>
         )}
       </div>
     </motion.div>
+  );
+}
+
+/* ─── Panel de roles (solo super_admin) ─────────────────────────────── */
+// Roles múltiples: Cliente y Acudiente son combinables (facetas de rol 'user');
+// Coach y Admin son el rol principal y excluyen a los demás.
+function RolesPanel({
+  u,
+  userId,
+  menoresCount,
+  planesCount,
+  esSelf,
+  onChanged,
+}: {
+  u: { rol: string; esMenor: boolean; esAcudiente?: boolean; esCoach?: boolean };
+  userId: string;
+  menoresCount: number;
+  planesCount: number;
+  esSelf: boolean;
+  onChanged: () => void;
+}) {
+  const patch = useMutation({
+    mutationFn: (body: Record<string, unknown>) => api.patch(`/users/${userId}`, body),
+    onSuccess: () => {
+      toast.success('Roles actualizados');
+      onChanged();
+    },
+    onError: (err) => {
+      const code = err instanceof ApiError ? err.data?.error : null;
+      if (code === 'tiene_planes_activos') {
+        toast.error(`Tiene ${planesCount} plan${planesCount !== 1 ? 'es' : ''} activo${planesCount !== 1 ? 's' : ''}: cancélalo(s) o espera a que termine(n) antes de cambiar el rol.`);
+      } else if (code === 'tiene_menores_vinculados') {
+        toast.error('Tiene menores vinculados: desvincúlalos o reasígnalos a otro acudiente antes de convertirlo en staff.');
+      } else if (code === 'no_puedes_quitarte_admin') {
+        toast.error('No puedes quitarte el rol de admin a ti mismo.');
+      } else {
+        toast.error('No se pudo actualizar el rol');
+      }
+    },
+  });
+
+  // Deja de poder tener planes propios (pasa a acudiente puro, coach o admin)
+  function bloqueadoPorPlanes(): boolean {
+    if (planesCount === 0) return false;
+    toast.error(`Tiene ${planesCount} plan${planesCount !== 1 ? 'es' : ''} activo${planesCount !== 1 ? 's' : ''}: cancélalo(s) o espera a que termine(n) antes de cambiar el rol.`);
+    return true;
+  }
+
+  // Convertir en staff a alguien con menores los dejaría sin acudiente operativo
+  function bloqueadoPorMenores(): boolean {
+    if (menoresCount === 0) return false;
+    toast.error(`Tiene ${menoresCount} menor${menoresCount !== 1 ? 'es' : ''} vinculado${menoresCount !== 1 ? 's' : ''}: desvincúlalo(s) o reasígnalo(s) a otro acudiente antes de convertirlo en staff.`);
+    return true;
+  }
+
+  async function confirmar(titulo: string, texto: string): Promise<boolean> {
+    const res = await Swal.fire({
+      title: titulo,
+      text: texto,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, cambiar',
+      cancelButtonText: 'Cancelar',
+      background: '#0f0f11', color: '#f8f8f8',
+      confirmButtonColor: '#3DC4DB', cancelButtonColor: '#2a2a2f',
+      reverseButtons: true,
+    });
+    return res.isConfirmed;
+  }
+
+  const esCliente = u.rol === 'user' && !u.esMenor && !u.esAcudiente;
+  const esAcudiente = u.rol === 'user' && (!!u.esAcudiente || menoresCount > 0);
+  // Coach: rol principal, o doble perfil de un admin (fila activa en coaches)
+  const esCoach = u.rol === 'coach' || (u.rol === 'super_admin' && !!u.esCoach);
+  const esAdmin = u.rol === 'super_admin';
+
+  async function toggleCliente() {
+    if (esCoach || esAdmin) {
+      if (esAdmin && esSelf) { toast.error('No puedes quitarte el rol de admin a ti mismo.'); return; }
+      if (await confirmar('¿Convertir en cliente?', 'Dejará de ser staff y pasará al espacio de cliente. Podrás asignarle planes. Deberá volver a iniciar sesión para ver su nuevo espacio.')) {
+        patch.mutate({ rol: 'user', esAcudiente: false });
+      }
+      return;
+    }
+    if (!esCliente) {
+      // Acudiente puro → también cliente
+      if (await confirmar('¿Volverlo cliente?', menoresCount > 0
+        ? 'Aparecerá en la lista de clientes y podrás asignarle planes. Conserva su acceso de acudiente.'
+        : 'Aparecerá en la lista de clientes y podrás asignarle planes. Como no tiene menores vinculados, quedará solo como cliente.')) {
+        patch.mutate({ esAcudiente: false });
+      }
+    } else {
+      // Cliente → acudiente puro (deja de ser cliente): bloqueado si tiene
+      // planes activos, para no dejarlos huérfanos (vigentes pero invisibles).
+      if (bloqueadoPorPlanes()) return;
+      if (await confirmar('¿Quitarle el rol de cliente?', 'Quedará solo como acudiente: sin planes ni reservas propias.')) {
+        patch.mutate({ esAcudiente: true });
+      }
+    }
+  }
+
+  async function toggleAcudiente() {
+    if (esCoach || esAdmin) {
+      toast.info('Primero conviértelo en cliente; el rol de acudiente se da al vincularle un menor.');
+      return;
+    }
+    if (menoresCount > 0) {
+      toast.info(`Tiene ${menoresCount} menor${menoresCount !== 1 ? 'es' : ''} vinculado${menoresCount !== 1 ? 's' : ''} — es acudiente mientras exista el vínculo.`);
+      return;
+    }
+    if (!u.esAcudiente) {
+      if (await confirmar('¿Marcarlo como acudiente?', 'Quedará como acudiente puro (sin planes propios) hasta que le vincules un menor.')) {
+        patch.mutate({ esAcudiente: true });
+      }
+    } else {
+      if (await confirmar('¿Quitarle el rol de acudiente?', 'No tiene menores vinculados; pasará a ser cliente.')) {
+        patch.mutate({ esAcudiente: false });
+      }
+    }
+  }
+
+  async function volverCoach() {
+    // Admin: el chip Coach activa/desactiva el DOBLE perfil (no cambia el rol,
+    // así que también aplica sobre la propia ficha)
+    if (esAdmin) {
+      if (!u.esCoach) {
+        if (await confirmar('¿Activar perfil de coach?', 'Seguirá siendo admin y además tendrá el espacio de coach — cambia entre ambos con el switch del inicio.')) {
+          patch.mutate({ esCoach: true });
+        }
+      } else {
+        if (await confirmar('¿Quitar el perfil de coach?', 'Deja de tener el espacio de coach; sigue siendo admin. Sus clases asignadas no se borran.')) {
+          patch.mutate({ esCoach: false });
+        }
+      }
+      return;
+    }
+    if (esCoach) return;
+    if (esSelf) { toast.error('No puedes cambiarte el rol a ti mismo.'); return; }
+    if (bloqueadoPorPlanes() || bloqueadoPorMenores()) return;
+    if (await confirmar('¿Convertir en entrenador?', 'Tendrá acceso al espacio de coach (clases, asistencias, alumnos). Deberá volver a iniciar sesión para ver su nuevo espacio.')) {
+      patch.mutate({ rol: 'coach', esAcudiente: false });
+    }
+  }
+
+  async function volverAdmin() {
+    if (esAdmin) return;
+    if (u.rol === 'user' && (bloqueadoPorPlanes() || bloqueadoPorMenores())) return;
+    if (await confirmar('¿Convertir en administrador?', u.rol === 'coach'
+      ? 'Tendrá acceso TOTAL y conserva su perfil de coach — podrá cambiar entre ambos espacios. Deberá volver a iniciar sesión.'
+      : 'Tendrá acceso TOTAL: usuarios, pagos, finanzas y configuración. Deberá volver a iniciar sesión para ver su nuevo espacio.')) {
+      patch.mutate({ rol: 'super_admin', esAcudiente: false });
+    }
+  }
+
+  const chip = (activo: boolean, bloqueado: boolean, color: string) =>
+    `px-3.5 h-9 rounded-full text-xs font-semibold border transition-colors ${
+      activo ? color : 'bg-background border-border text-muted-foreground hover:text-foreground'
+    } ${bloqueado ? 'opacity-90' : ''}`;
+
+  return (
+    <div className="rounded-2xl bg-card border border-border p-4 space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Roles</p>
+      <div className="flex flex-wrap gap-2">
+        <button disabled={patch.isPending} onClick={toggleCliente} className={chip(esCliente, false, 'bg-blue-500/15 text-blue-300 border-blue-500/40')}>
+          Cliente
+        </button>
+        <button disabled={patch.isPending} onClick={toggleAcudiente} className={chip(esAcudiente, menoresCount > 0, 'bg-pink-500/15 text-pink-300 border-pink-500/40')}>
+          Acudiente{menoresCount > 0 ? ` · ${menoresCount}` : ''}
+        </button>
+        <button disabled={patch.isPending} onClick={volverCoach} className={chip(esCoach, false, 'bg-green-500/15 text-green-300 border-green-500/40')}>
+          Coach
+        </button>
+        <button disabled={patch.isPending} onClick={volverAdmin} className={chip(esAdmin, false, 'bg-purple-500/15 text-purple-300 border-purple-500/40')}>
+          Admin
+        </button>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Cliente y Acudiente se pueden combinar, y un Admin puede tener además el perfil de Coach. Para un cliente, Coach o Admin reemplazan su rol.
+      </p>
+    </div>
+  );
+}
+
+/* ─── Convertir menor en cliente (el niño creció) ───────────────────── */
+function ConvertMenorPanel({ userId, nombre, onChanged }: { userId: string; nombre: string; onChanged: () => void }) {
+  const convert = useMutation({
+    mutationFn: () => api.patch(`/users/${userId}`, { esMenor: false, esAcudiente: false }),
+    onSuccess: () => {
+      toast.success('Ahora es cliente');
+      onChanged();
+    },
+    onError: () => toast.error('No se pudo convertir'),
+  });
+
+  async function handleConvert() {
+    const res = await Swal.fire({
+      title: '¿Convertir en cliente?',
+      text: `${nombre} dejará de ser menor: se desvincula de sus acudientes y pasa a manejar su cuenta como cliente. Su historial de reservas y planes se conserva.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, convertir',
+      cancelButtonText: 'Cancelar',
+      background: '#0f0f11', color: '#f8f8f8',
+      confirmButtonColor: '#3DC4DB', cancelButtonColor: '#2a2a2f',
+      reverseButtons: true,
+    });
+    if (res.isConfirmed) convert.mutate();
+  }
+
+  return (
+    <div className="rounded-2xl bg-card border border-amber-500/20 p-4 flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-wider text-amber-400">Menor de edad</p>
+        <p className="text-xs text-muted-foreground mt-0.5">¿Ya creció? Conviértelo en cliente con cuenta propia.</p>
+      </div>
+      <Button size="sm" variant="outline" loading={convert.isPending} onClick={handleConvert}>
+        Convertir en cliente
+      </Button>
+    </div>
   );
 }
 

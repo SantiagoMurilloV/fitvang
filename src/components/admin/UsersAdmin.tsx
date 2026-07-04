@@ -20,10 +20,15 @@ interface UserRow {
   rol: Role;
   esMenor: boolean;
   esAcudiente: boolean;
+  // Menores vinculados en guardians: un cliente también puede ser acudiente
+  menoresACargo?: number;
   activo: boolean;
   avatarUrl?: string | null;
   createdAt: string;
 }
+
+// Acudiente = flag esAcudiente O cliente con menores vinculados
+const esAcudienteDe = (u: UserRow) => u.esAcudiente || (u.menoresACargo ?? 0) > 0;
 
 // ── Tabs de tipo de usuario ───────────────────────────────────────────────
 const USER_TABS = [
@@ -41,12 +46,15 @@ type TabKey = typeof USER_TABS[number]['key'];
 function UserRow({ u, onSelect }: { u: UserRow; onSelect: () => void }) {
   const initials = u.nombre.split(' ').map((s) => s[0]).slice(0, 2).join('');
 
+  // Colores alineados con los de las pestañas: Menor ámbar, Acudiente rosa, Cliente azul
   const ROL_BADGE: Record<Role, string> = {
     super_admin: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
     coach: 'bg-green-500/15 text-green-300 border-green-500/30',
-    user: u.esAcudiente
-      ? 'bg-pink-500/15 text-pink-300 border-pink-500/30'
-      : 'bg-blue-500/10 text-blue-300 border-blue-500/20',
+    user: u.esMenor
+      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+      : u.esAcudiente
+        ? 'bg-pink-500/15 text-pink-300 border-pink-500/30'
+        : 'bg-blue-500/10 text-blue-300 border-blue-500/20',
   };
 
   const ROL_LABEL: Record<Role, string> = {
@@ -67,6 +75,12 @@ function UserRow({ u, onSelect }: { u: UserRow; onSelect: () => void }) {
           <p className="font-semibold text-sm truncate">{u.nombre}</p>
           <p className="text-xs text-muted-foreground truncate">{u.email} · {u.documento}</p>
         </div>
+        {/* Cliente que además es acudiente → doble badge */}
+        {u.rol === 'user' && !u.esAcudiente && (u.menoresACargo ?? 0) > 0 && (
+          <span className="text-[10px] uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 bg-pink-500/15 text-pink-300 border-pink-500/30">
+            Acudiente
+          </span>
+        )}
         <span className={`text-[10px] uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 ${ROL_BADGE[u.rol]}`}>
           {ROL_LABEL[u.rol]}
         </span>
@@ -364,7 +378,8 @@ export function UsersAdmin() {
 
   const filtered = allUsers.filter((u) => {
     if (activeTab === 'menor') return u.rol === 'user' && u.esMenor;
-    if (activeTab === 'acudiente') return u.rol === 'user' && u.esAcudiente;
+    // Un cliente que es acudiente aparece en AMBAS pestañas (Clientes y Acudientes)
+    if (activeTab === 'acudiente') return u.rol === 'user' && esAcudienteDe(u);
     if (activeTab === 'user') return u.rol === 'user' && !u.esMenor && !u.esAcudiente;
     return u.rol === activeTab;
   });
@@ -373,7 +388,7 @@ export function UsersAdmin() {
     user: allUsers.filter((u) => u.rol === 'user' && !u.esMenor && !u.esAcudiente).length,
     coach: allUsers.filter((u) => u.rol === 'coach').length,
     menor: allUsers.filter((u) => u.esMenor).length,
-    acudiente: allUsers.filter((u) => u.esAcudiente).length,
+    acudiente: allUsers.filter((u) => u.rol === 'user' && esAcudienteDe(u)).length,
     super_admin: allUsers.filter((u) => u.rol === 'super_admin').length,
   };
 

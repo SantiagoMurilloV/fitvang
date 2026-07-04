@@ -9,6 +9,10 @@ export interface SessionUser {
   avatarUrl?: string | null;
   esMenor?: boolean;
   esAcudiente?: boolean;
+  /** Cliente con menores vinculados en guardians: accede también a /acudiente */
+  tieneMenores?: boolean;
+  /** Doble perfil: admin con fila activa en coaches — accede también a /coach */
+  esCoach?: boolean;
   terminosAceptados?: boolean;
 }
 

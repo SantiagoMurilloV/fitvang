@@ -272,6 +272,24 @@ function Shell({ user, variant, children }: Props) {
 
   const roleLabel: Record<string, string> = { app: 'Miembro', coach: 'Coach', admin: 'Admin', acudiente: 'Acudiente' };
 
+  // Doble perfil: en el header del dashboard el chip de rol se convierte en un
+  // switch para cambiar de espacio (cliente↔acudiente, admin↔coach).
+  const esClienteAcudiente = authUser.rol === 'user' && !authUser.esAcudiente && !!authUser.tieneMenores;
+  const esAdminCoach = authUser.rol === 'super_admin' && !!authUser.esCoach;
+  const spaceSwitch: { href: string; label: string; activo: boolean; activeClass: string }[] | null =
+    esClienteAcudiente && (variant === 'app' || variant === 'acudiente')
+      ? [
+          { href: '/app', label: 'Cliente', activo: variant === 'app', activeClass: 'bg-primary text-primary-foreground' },
+          { href: '/acudiente', label: 'Acudiente', activo: variant === 'acudiente', activeClass: 'bg-pink-500 text-white' },
+        ]
+      : esAdminCoach && (variant === 'admin' || variant === 'coach')
+        ? [
+            { href: '/admin', label: 'Admin', activo: variant === 'admin', activeClass: 'bg-purple-500 text-white' },
+            { href: '/coach', label: 'Coach', activo: variant === 'coach', activeClass: 'bg-green-500 text-white' },
+          ]
+        : null;
+  const showSpaceSwitch = isDashboard && !!spaceSwitch;
+
   return (
     <div className="min-h-screen flex flex-col">
       <header
@@ -281,9 +299,25 @@ function Shell({ user, variant, children }: Props) {
 
         {/* Izquierda: logo (dashboard) | flecha+título (sección con back) | título solo */}
         {isDashboard ? (
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground border border-border rounded px-1.5 py-0.5">
-            {roleLabel[variant] ?? variant}
-          </span>
+          showSpaceSwitch && spaceSwitch ? (
+            <div className="flex items-center h-8 rounded-full bg-card border border-border p-0.5">
+              {spaceSwitch.map((s) => (
+                <a
+                  key={s.href}
+                  href={s.href}
+                  className={`px-3 h-7 rounded-full text-[11px] font-semibold flex items-center transition-colors ${
+                    s.activo ? s.activeClass : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {s.label}
+                </a>
+              ))}
+            </div>
+          ) : (
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground border border-border rounded px-1.5 py-0.5">
+              {roleLabel[variant] ?? variant}
+            </span>
+          )
         ) : header.back ? (
           <a href={header.back} className="flex items-center gap-1 text-base font-bold hover:text-primary transition-colors">
             <ChevronLeft size={20} className="text-muted-foreground" />
