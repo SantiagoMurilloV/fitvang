@@ -24,6 +24,17 @@ const { title = "Fitvang" } = Astro.props;
     <!-- Android / Chrome -->
     <meta name="mobile-web-app-capable" content="yes" />
 
+    <!-- Captura temprana del prompt de instalación PWA (Android/Chrome): el
+         evento puede dispararse antes de que React hidrate, así que se guarda
+         en window y se avisa con un evento propio al banner de instalación. -->
+    <script is:inline set:html={`
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__fvInstallPrompt = e;
+        window.dispatchEvent(new Event('fv-install-ready'));
+      });
+    `} />
+
     <!-- General -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
