@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { motion } from 'motion/react';
 import { format, parseISO, isThisMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { RotateCcw, Trash2 } from 'lucide-react';
+import { RotateCcw, Trash2, FileImage } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { api } from '@/lib/api';
 import { useUiAction } from '@/lib/ui-actions';
@@ -22,6 +22,7 @@ interface Payment {
   estado: 'exitoso' | 'pendiente' | 'fallido' | 'reembolsado';
   createdAt: string;
   notas?: string;
+  comprobanteUrl?: string | null;
   planNombre?: string | null;
   fechaInicio?: string | null;
   fechaFin?: string | null;
@@ -74,6 +75,15 @@ export function PaymentsAdmin() {
     onError: () => toast.error('No se pudo actualizar el pago.'),
   });
 
+  const rechazar = useMutation({
+    mutationFn: (id: string) => api.post(`/payments/${id}/rechazar`),
+    onSuccess: () => {
+      toast.success('Comprobante rechazado — se le avisó al usuario');
+      qc.invalidateQueries({ queryKey: ['admin-payments'] });
+    },
+    onError: () => toast.error('No se pudo rechazar el comprobante.'),
+  });
+
   const deletePago = useMutation({
     mutationFn: (id: string) => api.delete(`/payments/${id}`),
     onSuccess: () => {
@@ -82,6 +92,33 @@ export function PaymentsAdmin() {
     },
     onError: () => toast.error('No se pudo eliminar el pago.'),
   });
+
+  // Revisión de un pago reportado por el usuario: muestra el comprobante y
+  // permite aprobarlo (conserva el medio que reportó el usuario) o rechazarlo
+  // (el cargo vuelve a pendiente sin comprobante y se le avisa al usuario).
+  async function handleRevisar(payment: Payment) {
+    const result = await Swal.fire({
+      title: 'Comprobante de pago',
+      html: `<p style="font-size:13px;color:#9ca3af;margin-bottom:8px;">${payment.nombre} · ${formatCop(payment.monto)} · ${payment.metodo}</p>
+        <a href="${payment.comprobanteUrl}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#3DC4DB;text-decoration:underline;">Abrir imagen completa</a>`,
+      imageUrl: payment.comprobanteUrl!,
+      imageAlt: 'Comprobante',
+      showCancelButton: true,
+      showDenyButton: true,
+      confirmButtonText: 'Aprobar pago',
+      denyButtonText: 'Rechazar',
+      cancelButtonText: 'Cerrar',
+      background: '#0f0f11', color: '#f8f8f8',
+      confirmButtonColor: '#22c55e', denyButtonColor: '#ef4444', cancelButtonColor: '#2a2a2f',
+      customClass: { popup: 'rounded-2xl border border-white/10', confirmButton: 'rounded-xl font-semibold', denyButton: 'rounded-xl font-semibold', cancelButton: 'rounded-xl font-semibold', image: 'rounded-xl max-h-[50vh] object-contain' },
+      reverseButtons: true,
+    });
+    if (result.isConfirmed) {
+      setEstado.mutate({ id: payment.id, estado: 'exitoso', metodo: payment.metodo });
+    } else if (result.isDenied) {
+      rechazar.mutate(payment.id);
+    }
+  }
 
   async function handleDelete(payment: Payment) {
     const result = await Swal.fire({
@@ -204,11 +241,24 @@ export function PaymentsAdmin() {
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
                     <p className="font-bold text-sm">{formatCop(payment.monto)}</p>
                     <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full border capitalize ${ESTADO_STYLES[payment.estado]}`}
+                      className={`text-[10px] px-2 py-0.5 rounded-full border capitalize ${
+                        payment.estado === 'pendiente' && payment.comprobanteUrl
+                          ? 'bg-primary/15 text-primary border-primary/30'
+                          : ESTADO_STYLES[payment.estado]
+                      }`}
                     >
-                      {payment.estado}
+                      {payment.estado === 'pendiente' && payment.comprobanteUrl ? 'En revisión' : payment.estado}
                     </span>
-                    {payment.estado === 'pendiente' && (
+                    {payment.estado === 'pendiente' && payment.comprobanteUrl && (
+                      <button
+                        onClick={() => handleRevisar(payment)}
+                        disabled={setEstado.isPending}
+                        className="mt-1 flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-green-500/15 text-green-400 border border-green-500/30 hover:bg-green-500/25 transition disabled:opacity-50"
+                      >
+                        <FileImage className="size-3" /> Revisar comprobante
+                      </button>
+                    )}
+                    {payment.estado === 'pendiente' && !payment.comprobanteUrl && (
                       <select
                         defaultValue=""
                         disabled={setEstado.isPending}
@@ -220,7 +270,7 @@ export function PaymentsAdmin() {
                         <option value="" disabled>Marcar pagado…</option>
                         <option value="efectivo">Efectivo</option>
                         <option value="transferencia">Transferencia</option>
-                        <option value="wompi_pse">Wompi PSE</option>
+                        <option value="nequi">Nequi</option>
                       </select>
                     )}
                     {payment.estado === 'pendiente' && (

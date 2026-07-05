@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Bell, X, Loader2,
   CalendarCheck, CircleDollarSign, CircleAlert, Banknote, CalendarClock,
-  CalendarX, ClipboardList, CircleX, PartyPopper, Ban, Dumbbell,
+  CalendarX, ClipboardList, CircleX, PartyPopper, Ban, Dumbbell, FileImage,
   type LucideIcon,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -25,6 +25,7 @@ const TIPO_ICON: Record<string, LucideIcon> = {
   pago_ok: CircleDollarSign,
   pago_fail: CircleAlert,
   pago_efectivo: Banknote,
+  pago_revision: FileImage,
   plan_vence: CalendarClock,
   plan_vencido: CalendarX,
   reserva: ClipboardList,
@@ -40,6 +41,7 @@ const TIPO_COLOR: Record<string, string> = {
   pago_ok: '#4ade80',
   pago_fail: '#f87171',
   pago_efectivo: '#4ade80',
+  pago_revision: '#facc15',
   plan_vence: '#facc15',
   plan_vencido: '#f87171',
   reserva: '#3DC4DB',
