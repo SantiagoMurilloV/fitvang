@@ -4,7 +4,8 @@ import { toast } from 'sonner';
 import { motion } from 'motion/react';
 import { format, parseISO, isThisMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, Trash2 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import { api } from '@/lib/api';
 import { useUiAction } from '@/lib/ui-actions';
 import { Card, StatCard } from '@/components/shared/Card';
@@ -33,8 +34,8 @@ type FilterTab = 'todos' | 'exitoso' | 'pendiente' | 'fallido';
 
 const ESTADO_STYLES: Record<Payment['estado'], string> = {
   exitoso: 'bg-green-500/15 text-green-400 border-green-500/30',
-  pendiente: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  fallido: 'bg-red-500/15 text-red-400 border-red-500/30',
+  pendiente: 'bg-red-500/15 text-red-400 border-red-500/30',
+  fallido: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
   reembolsado: 'bg-white/10 text-muted-foreground border-border',
 };
 
@@ -72,6 +73,31 @@ export function PaymentsAdmin() {
     },
     onError: () => toast.error('No se pudo actualizar el pago.'),
   });
+
+  const deletePago = useMutation({
+    mutationFn: (id: string) => api.delete(`/payments/${id}`),
+    onSuccess: () => {
+      toast.success('Pago pendiente eliminado');
+      qc.invalidateQueries({ queryKey: ['admin-payments'] });
+    },
+    onError: () => toast.error('No se pudo eliminar el pago.'),
+  });
+
+  async function handleDelete(payment: Payment) {
+    const result = await Swal.fire({
+      title: '¿Eliminar pago pendiente?',
+      text: `Se borra el cargo de ${formatCop(payment.monto)} de ${payment.nombre}. Esta acción no se puede deshacer.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      background: '#0f0f11', color: '#f8f8f8',
+      confirmButtonColor: '#ef4444', cancelButtonColor: '#2a2a2f',
+      customClass: { popup: 'rounded-2xl border border-white/10', confirmButton: 'rounded-xl font-semibold', cancelButton: 'rounded-xl font-semibold' },
+      reverseButtons: true,
+    });
+    if (result.isConfirmed) deletePago.mutate(payment.id);
+  }
 
   const sorted = useMemo(() => {
     if (!data?.payments) return [];
@@ -196,6 +222,15 @@ export function PaymentsAdmin() {
                         <option value="transferencia">Transferencia</option>
                         <option value="wompi_pse">Wompi PSE</option>
                       </select>
+                    )}
+                    {payment.estado === 'pendiente' && (
+                      <button
+                        onClick={() => handleDelete(payment)}
+                        disabled={deletePago.isPending}
+                        className="mt-1 flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25 transition disabled:opacity-50"
+                      >
+                        <Trash2 className="size-3" /> Eliminar
+                      </button>
                     )}
                     {payment.estado === 'exitoso' && (
                       <button
