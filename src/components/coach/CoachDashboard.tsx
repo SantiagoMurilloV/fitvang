@@ -238,7 +238,10 @@ function SessionDetail({ session, onBack }: { session: SessionRow; onBack: () =>
             <motion.div key={a.bookingId} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}>
               <Card className="flex items-center gap-3">
                 <div className="size-10 rounded-full bg-white/10 grid place-items-center text-sm font-bold shrink-0">
-                  {a.nombre.split(' ').map((s) => s[0]).slice(0, 2).join('')}
+                  {a.avatarUrl
+                    ? <img src={a.avatarUrl} alt={a.nombre} className="size-10 rounded-full object-cover" />
+                    : a.nombre.split(' ').map((s) => s[0]).slice(0, 2).join('')
+                  }
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm truncate">{a.nombre}</p>
