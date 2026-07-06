@@ -157,7 +157,7 @@ export function SchedulePicker({ acudiente = false }: { acudiente?: boolean }) {
         sesion_no_disponible: 'Esta sesión ya no está disponible.',
         sesion_no_encontrada: 'Esta sesión ya no existe.',
         muy_tarde_para_reservar: 'Ya es muy tarde: reserva con al menos 30 min de anticipación.',
-        horario_restringido: 'No puedes reservar entre las 11 PM y las 6 AM.',
+        horario_restringido: 'No puedes reservar entre las 10 PM y las 6 AM.',
         plan_sin_sesiones: acudiente ? 'El plan del menor no tiene sesiones disponibles.' : 'Tu plan no tiene sesiones disponibles.',
         saldo_pendiente: 'Hay un saldo pendiente. Ponte al día con los pagos para seguir entrenando.',
       };

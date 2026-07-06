@@ -37,6 +37,13 @@ interface Scoring {
 interface PaymentRow {
   id: string; monto: number; metodo: string; estado: string; createdAt: string; notas?: string | null;
 }
+interface PlanInfo {
+  id: string; planNombre: string; trainingNombre: string; trainingColor: string;
+  modalidad: string; precioCopAplicado: number; fechaInicio: string; fechaFin: string;
+  sesionesTotales: number | null; sesionesUsadas: number; estado: string;
+  renovacionAutomatica: boolean;
+  ultimoPago: { fecha: string; metodo: string; monto: number } | null;
+}
 
 const PAGO_ESTADO: Record<string, { label: string; cls: string }> = {
   exitoso: { label: 'Pagado', cls: 'text-green-400 bg-green-500/10 border-green-500/20' },
@@ -46,7 +53,17 @@ const PAGO_ESTADO: Record<string, { label: string; cls: string }> = {
 };
 const METODO_LABEL: Record<string, string> = {
   efectivo: 'Efectivo', wompi_card: 'Tarjeta', wompi_nequi: 'Nequi', wompi_pse: 'PSE',
+  transferencia: 'Transferencia', nequi: 'Nequi',
 };
+const MODALIDAD_LABEL: Record<string, string> = {
+  individual: 'Individual', pareja: 'Pareja', amigos: 'Amigos',
+};
+
+// Fechas tipo 'yyyy-MM-dd' se parsean por partes para no correrse un día por timezone
+function fmtFecha(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 // ─── Cash Payment Modal ───────────────────────────────────────────────────────
 
@@ -101,11 +118,92 @@ function CashPaymentModal({ userId, userName, open, onClose, onSuccess }: {
   );
 }
 
+// ─── Plan Modal ───────────────────────────────────────────────────────────────
+
+function PlanModal({ userId, userName, onClose }: { userId: string; userName: string; onClose: () => void }) {
+  const ficha = useQuery({
+    queryKey: ['user-planes', userId],
+    queryFn: () => api.get<{ planesActivos: PlanInfo[] }>(`/users/${userId}/ficha`),
+  });
+  const planes = ficha.data?.planesActivos ?? [];
+  return createPortal(
+    <div className="fixed inset-0 z-300 bg-black/60 flex items-end" onClick={onClose}>
+      <motion.div
+        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full rounded-t-2xl bg-[#1A1A1A] border-t border-border p-6 space-y-4 max-h-[80vh] overflow-y-auto"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 24px)' }}
+      >
+        <div>
+          <h2 className="text-lg font-bold">Plan</h2>
+          <p className="text-sm text-muted-foreground">{userName}</p>
+        </div>
+        {ficha.isLoading ? (
+          <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-24 rounded-xl bg-white/5 animate-pulse" />)}</div>
+        ) : planes.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">Sin plan activo.</p>
+        ) : (
+          planes.map((p) => {
+            const [y, m, d] = p.fechaFin.split('-').map(Number);
+            const diasRestantes = Math.ceil((new Date(y, m - 1, d).getTime() - Date.now()) / 86400000);
+            return (
+              <div key={p.id} className="rounded-xl bg-background border border-border p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-1 self-stretch rounded-full shrink-0" style={{ background: p.trainingColor }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold truncate">{p.planNombre}</p>
+                    <p className="text-xs text-muted-foreground">{p.trainingNombre} · {MODALIDAD_LABEL[p.modalidad] ?? p.modalidad}</p>
+                  </div>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 text-green-400 bg-green-500/10 border-green-500/20">Activo</span>
+                </div>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Vigencia</span>
+                    <span className="font-medium text-right">{fmtFecha(p.fechaInicio)} – {fmtFecha(p.fechaFin)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Vence</span>
+                    <span className={`font-medium ${diasRestantes <= 5 ? 'text-amber-400' : ''}`}>
+                      {diasRestantes < 0 ? 'Vencido' : diasRestantes === 0 ? 'Hoy' : `En ${diasRestantes} día${diasRestantes === 1 ? '' : 's'}`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Sesiones</span>
+                    <span className="font-medium">
+                      {p.sesionesTotales == null ? 'Ilimitadas' : `${p.sesionesUsadas} de ${p.sesionesTotales} usadas`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Precio</span>
+                    <span className="font-medium">{formatCop(p.precioCopAplicado)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Pagado</span>
+                    {p.ultimoPago ? (
+                      <span className="font-medium text-right">
+                        {new Date(p.ultimoPago.fecha).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })} · {METODO_LABEL[p.ultimoPago.metodo] ?? p.ultimoPago.metodo}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">Sin pago registrado</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </motion.div>
+    </div>,
+    document.body,
+  );
+}
+
 // ─── Session Detail ───────────────────────────────────────────────────────────
 
 function SessionDetail({ session, onBack }: { session: SessionRow; onBack: () => void }) {
   const qc = useQueryClient();
-  const [cashModal, setCashModal] = useState<{ userId: string; userName: string } | null>(null);
+  const [planModal, setPlanModal] = useState<{ userId: string; userName: string } | null>(null);
   const att = useQuery({
     queryKey: ['attendees', session.id],
     queryFn: () => api.get<{ attendees: Attendee[] }>(`/classes/sessions/${session.id}/attendees`),
@@ -147,10 +245,10 @@ function SessionDetail({ session, onBack }: { session: SessionRow; onBack: () =>
                   <p className="text-xs text-muted-foreground">{a.estado}</p>
                 </div>
                 <button
-                  onClick={() => setCashModal({ userId: a.userId, userName: a.nombre })}
-                  className="size-10 rounded-full border border-border flex items-center justify-center hover:border-primary hover:text-primary transition-colors shrink-0"
+                  onClick={() => setPlanModal({ userId: a.userId, userName: a.nombre })}
+                  className="h-10 px-3 rounded-full border border-border flex items-center justify-center text-xs font-semibold hover:border-primary hover:text-primary transition-colors shrink-0"
                 >
-                  <DollarSign className="size-4" />
+                  Ver plan
                 </button>
                 <div className="flex gap-1.5 shrink-0">
                   <button
@@ -171,11 +269,10 @@ function SessionDetail({ session, onBack }: { session: SessionRow; onBack: () =>
         )}
       </div>
       <AnimatePresence>
-        {cashModal && (
-          <CashPaymentModal
-            userId={cashModal.userId} userName={cashModal.userName} open={true}
-            onClose={() => setCashModal(null)}
-            onSuccess={() => qc.invalidateQueries({ queryKey: ['attendees', session.id] })}
+        {planModal && (
+          <PlanModal
+            userId={planModal.userId} userName={planModal.userName}
+            onClose={() => setPlanModal(null)}
           />
         )}
       </AnimatePresence>
