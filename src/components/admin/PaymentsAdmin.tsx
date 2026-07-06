@@ -51,12 +51,17 @@ const TABS: { key: FilterTab; label: string }[] = [
   { key: 'todos', label: 'Todos' },
   { key: 'exitoso', label: 'Exitosos' },
   { key: 'pendiente', label: 'Pendientes' },
-  { key: 'fallido', label: 'Fallidos' },
+  { key: 'fallido', label: 'Rechazados' },
 ];
 
 /* ─── Component ──────────────────────────────────────────────────────── */
 // Búsqueda insensible a tildes: "muñoz" y "munoz" encuentran lo mismo
 const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// Mes al que se atribuye un pago: el de la vigencia que cubre (as\u00ed se haya
+// registrado en otro mes); pagos sin plan caen al mes en que se registraron.
+const mesDe = (p: Payment) =>
+  p.fechaInicio ? p.fechaInicio.slice(0, 7) : format(parseISO(p.createdAt), 'yyyy-MM');
 
 export function PaymentsAdmin() {
   const currentMonth = format(new Date(), 'yyyy-MM');
@@ -168,15 +173,12 @@ export function PaymentsAdmin() {
   const mesMasAntiguo = useMemo(() => {
     if (!sorted.length) return currentMonth;
     return sorted.reduce((min, p) => {
-      const m = format(parseISO(p.createdAt), 'yyyy-MM');
+      const m = mesDe(p);
       return m < min ? m : min;
     }, currentMonth);
   }, [sorted, currentMonth]);
 
-  const delMes = useMemo(
-    () => sorted.filter((p) => format(parseISO(p.createdAt), 'yyyy-MM') === mes),
-    [sorted, mes],
-  );
+  const delMes = useMemo(() => sorted.filter((p) => mesDe(p) === mes), [sorted, mes]);
 
   // Con búsqueda activa se ignora el mes: el buscador sirve para ver todo el
   // historial de una persona; sin búsqueda, la vista es del mes navegado.
@@ -322,7 +324,9 @@ export function PaymentsAdmin() {
                           : ESTADO_STYLES[payment.estado]
                       }`}
                     >
-                      {payment.estado === 'pendiente' && payment.comprobanteUrl ? 'En revisión' : payment.estado}
+                      {payment.estado === 'pendiente' && payment.comprobanteUrl
+                        ? 'En revisión'
+                        : payment.estado === 'fallido' ? 'rechazado' : payment.estado}
                     </span>
                     {payment.estado === 'pendiente' && payment.comprobanteUrl && (
                       <button
