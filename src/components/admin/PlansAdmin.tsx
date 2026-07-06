@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
-import { Pencil, Trash2, X } from 'lucide-react';
+import { Pencil, Trash2, X, Plus } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUiAction } from '@/lib/ui-actions';
 import { Card, StatCard } from '@/components/shared/Card';
@@ -60,6 +60,7 @@ function PlanFormModal({
   onSuccess: () => void;
 }) {
   const isEdit = !!plan;
+  const qc = useQueryClient();
   const [form, setForm] = useState({
     nombre: plan?.nombre ?? '',
     modalidad: plan?.modalidad ?? 'individual' as PlanType['modalidad'],
@@ -91,6 +92,59 @@ function PlanFormModal({
     },
     onError: () => toast.error('No se pudo guardar el plan'),
   });
+
+  // Crear una categoría (tipo de entrenamiento) sin salir del form del plan.
+  // Sugiere un color que no esté usado por otra categoría.
+  async function crearCategoria() {
+    const usados = trainingTypes.map((t) => (t.colorHex ?? '').toLowerCase());
+    const paleta = ['#A78BFA', '#F472B6', '#38BDF8', '#F87171', '#34D399', '#E879F9', '#FACC15', '#FB923C'];
+    const sugerido = paleta.find((p) => !usados.includes(p.toLowerCase())) ?? paleta[0];
+
+    const { value } = await Swal.fire<{ nombre: string; color: string }>({
+      title: 'Nueva categoría',
+      html: `
+        <input id="cat-nombre" placeholder="Nombre (ej: Yoga, Boxeo…)" maxlength="100"
+          style="width:100%;height:44px;padding:0 14px;border-radius:12px;background:#0a0a0c;border:1px solid rgba(255,255,255,0.12);color:#f8f8f8;font-size:14px;outline:none;box-sizing:border-box;" />
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;font-size:13px;color:#9ca3af;">
+          Color de la categoría
+          <input type="color" id="cat-color" value="${sugerido}" style="width:52px;height:34px;border:none;background:none;cursor:pointer;" />
+        </label>`,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: 'Crear categoría',
+      cancelButtonText: 'Cancelar',
+      background: '#0f0f11', color: '#f8f8f8',
+      confirmButtonColor: '#3DC4DB', cancelButtonColor: '#2a2a2f',
+      customClass: { popup: 'rounded-2xl border border-white/10', confirmButton: 'rounded-xl font-semibold', cancelButton: 'rounded-xl font-semibold' },
+      reverseButtons: true,
+      preConfirm: () => {
+        const nombre = (document.getElementById('cat-nombre') as HTMLInputElement).value.trim();
+        const color = (document.getElementById('cat-color') as HTMLInputElement).value;
+        if (!nombre) {
+          Swal.showValidationMessage('El nombre es obligatorio');
+          return false;
+        }
+        return { nombre, color };
+      },
+    });
+    if (!value) return;
+
+    try {
+      const { trainingType } = await api.post<{ trainingType: TrainingType }>('/classes/training-types', {
+        nombre: value.nombre,
+        colorHex: value.color,
+      });
+      await qc.invalidateQueries({ queryKey: ['training-types'] });
+      setForm((f) => ({ ...f, trainingTypeId: trainingType.id }));
+      toast.success(`Categoría "${trainingType.nombre}" creada`);
+    } catch (e: unknown) {
+      toast.error(
+        (e as { message?: string })?.message === 'color_en_uso'
+          ? 'Ese color ya lo usa otra categoría — elige uno distinto.'
+          : 'No se pudo crear la categoría.',
+      );
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center" onClick={onClose}>
@@ -130,7 +184,16 @@ function PlanFormModal({
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground">Categoría (tipo de entrenamiento)</label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-muted-foreground">Categoría (tipo de entrenamiento)</label>
+            <button
+              type="button"
+              onClick={crearCategoria}
+              className="flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary/80 transition-colors"
+            >
+              <Plus size={12} /> Nueva
+            </button>
+          </div>
           <select value={form.trainingTypeId} onChange={(e) => setForm({ ...form, trainingTypeId: e.target.value })}
             className="mt-1 w-full h-11 px-3 rounded-xl bg-background border border-border focus:border-primary focus:outline-none text-sm">
             {trainingTypes.map((t) => (
