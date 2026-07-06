@@ -2,9 +2,9 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
-import { format, parseISO, isThisMonth } from 'date-fns';
+import { format, parseISO, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { RotateCcw, Trash2, FileImage } from 'lucide-react';
+import { RotateCcw, Trash2, FileImage, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { api } from '@/lib/api';
 import { useUiAction } from '@/lib/ui-actions';
@@ -55,14 +55,20 @@ const TABS: { key: FilterTab; label: string }[] = [
 ];
 
 /* ─── Component ──────────────────────────────────────────────────────── */
+// Búsqueda insensible a tildes: "muñoz" y "munoz" encuentran lo mismo
+const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
 export function PaymentsAdmin() {
+  const currentMonth = format(new Date(), 'yyyy-MM');
   const [filter, setFilter] = useState<FilterTab>('todos');
+  const [q, setQ] = useState('');
+  const [mes, setMes] = useState(currentMonth);
   const qc = useQueryClient();
   useUiAction('ir-finanzas', () => { window.location.href = '/admin/finanzas'; });
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-payments'],
-    queryFn: () => api.get<{ payments: Payment[] }>('/payments'),
+    queryFn: () => api.get<{ payments: Payment[] }>('/payments?limit=500'),
   });
 
   const setEstado = useMutation({
@@ -120,6 +126,21 @@ export function PaymentsAdmin() {
     }
   }
 
+  // Ver el comprobante de un pago ya resuelto (aprobado/rechazado), sin acciones.
+  function handleVerComprobante(payment: Payment) {
+    Swal.fire({
+      title: 'Comprobante de pago',
+      html: `<p style="font-size:13px;color:#9ca3af;margin-bottom:8px;">${payment.nombre} · ${formatCop(payment.monto)} · ${payment.metodo}</p>
+        <a href="${payment.comprobanteUrl}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#3DC4DB;text-decoration:underline;">Abrir imagen completa</a>`,
+      imageUrl: payment.comprobanteUrl!,
+      imageAlt: 'Comprobante',
+      confirmButtonText: 'Cerrar',
+      background: '#0f0f11', color: '#f8f8f8',
+      confirmButtonColor: '#2a2a2f',
+      customClass: { popup: 'rounded-2xl border border-white/10', confirmButton: 'rounded-xl font-semibold', image: 'rounded-xl max-h-[50vh] object-contain' },
+    });
+  }
+
   async function handleDelete(payment: Payment) {
     const result = await Swal.fire({
       title: '¿Eliminar pago pendiente?',
@@ -143,16 +164,36 @@ export function PaymentsAdmin() {
     );
   }, [data]);
 
+  // Mes más antiguo con movimientos: límite para navegar hacia atrás
+  const mesMasAntiguo = useMemo(() => {
+    if (!sorted.length) return currentMonth;
+    return sorted.reduce((min, p) => {
+      const m = format(parseISO(p.createdAt), 'yyyy-MM');
+      return m < min ? m : min;
+    }, currentMonth);
+  }, [sorted, currentMonth]);
+
+  const delMes = useMemo(
+    () => sorted.filter((p) => format(parseISO(p.createdAt), 'yyyy-MM') === mes),
+    [sorted, mes],
+  );
+
+  // Con búsqueda activa se ignora el mes: el buscador sirve para ver todo el
+  // historial de una persona; sin búsqueda, la vista es del mes navegado.
   const filtered = useMemo(() => {
-    if (filter === 'todos') return sorted;
-    return sorted.filter((p) => p.estado === filter);
-  }, [sorted, filter]);
+    let rows = q.trim() ? sorted.filter((p) => normalize(p.nombre).includes(normalize(q))) : delMes;
+    if (filter !== 'todos') rows = rows.filter((p) => p.estado === filter);
+    return rows;
+  }, [sorted, delMes, filter, q]);
 
   const ingresosMes = useMemo(() => {
-    return sorted
-      .filter((p) => p.estado === 'exitoso' && isThisMonth(parseISO(p.createdAt)))
+    return delMes
+      .filter((p) => p.estado === 'exitoso')
       .reduce((acc, p) => acc + p.monto, 0);
-  }, [sorted]);
+  }, [delMes]);
+
+  const mesLabel = format(parseISO(mes + '-01'), 'MMMM yyyy', { locale: es });
+  const moverMes = (delta: number) => setMes(format(addMonths(parseISO(mes + '-01'), delta), 'yyyy-MM'));
 
   return (
     <div className="space-y-6">
@@ -163,10 +204,44 @@ export function PaymentsAdmin() {
         </div>
       ) : !isError ? (
         <div className="grid grid-cols-2 gap-3">
-          <StatCard label="Ingresos del mes" value={formatCop(ingresosMes)} accent />
-          <StatCard label="Total registros" value={sorted.length} />
+          <StatCard
+            label={mes === currentMonth ? 'Ingresos del mes' : `Ingresos ${mesLabel}`}
+            value={formatCop(ingresosMes)}
+            accent
+          />
+          <StatCard label={`Registros ${mesLabel}`} value={delMes.length} />
         </div>
       ) : null}
+
+      {/* Navegación por mes: Finanzas muestra el mes actual y se puede ir atrás */}
+      <div className="flex items-center justify-between bg-card rounded-xl px-2 py-1.5">
+        <button
+          onClick={() => moverMes(-1)}
+          disabled={mes <= mesMasAntiguo}
+          className="size-9 grid place-items-center rounded-lg hover:bg-white/10 transition disabled:opacity-30"
+        >
+          <ChevronLeft className="size-4" />
+        </button>
+        <p className="text-sm font-semibold capitalize">{mesLabel}</p>
+        <button
+          onClick={() => moverMes(1)}
+          disabled={mes >= currentMonth}
+          className="size-9 grid place-items-center rounded-lg hover:bg-white/10 transition disabled:opacity-30"
+        >
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
+
+      {/* Búsqueda por nombre: ignora el mes para ver el historial completo */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por nombre (historial completo)"
+          className="w-full h-11 pl-10 pr-4 rounded-xl bg-card border border-border focus:border-primary focus:outline-none"
+        />
+      </div>
 
       <div className="flex gap-1 bg-card rounded-xl p-1 overflow-x-auto">
         {TABS.map((t) => (
@@ -280,6 +355,14 @@ export function PaymentsAdmin() {
                         className="mt-1 flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25 transition disabled:opacity-50"
                       >
                         <Trash2 className="size-3" /> Eliminar
+                      </button>
+                    )}
+                    {payment.estado !== 'pendiente' && payment.comprobanteUrl && (
+                      <button
+                        onClick={() => handleVerComprobante(payment)}
+                        className="mt-1 flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition"
+                      >
+                        <FileImage className="size-3" /> Ver comprobante
                       </button>
                     )}
                     {payment.estado === 'exitoso' && (
