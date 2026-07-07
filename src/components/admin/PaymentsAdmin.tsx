@@ -24,6 +24,8 @@ interface Payment {
   notas?: string;
   comprobanteUrl?: string | null;
   planNombre?: string | null;
+  trainingNombre?: string | null;
+  modalidad?: string | null;
   fechaInicio?: string | null;
   fechaFin?: string | null;
 }
@@ -45,6 +47,10 @@ const METODO_STYLES: Record<string, string> = {
   CARD: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   NEQUI: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
   PSE: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+};
+
+const MODALIDAD_LABEL: Record<string, string> = {
+  individual: 'Individual', pareja: 'Pareja', amigos: 'Amigos',
 };
 
 const TABS: { key: FilterTab; label: string }[] = [
@@ -301,7 +307,11 @@ export function PaymentsAdmin() {
                       </span>
                     </div>
                     {payment.planNombre && (
-                      <p className="text-xs text-foreground/80 mt-0.5">{payment.planNombre}</p>
+                      <p className="text-xs text-foreground/80 mt-0.5">
+                        {payment.planNombre}
+                        {payment.trainingNombre ? ` · ${payment.trainingNombre}` : ''}
+                        {payment.modalidad ? ` · ${MODALIDAD_LABEL[payment.modalidad] ?? payment.modalidad}` : ''}
+                      </p>
                     )}
                     {payment.fechaInicio && payment.fechaFin && (
                       <p className="text-[11px] text-muted-foreground">

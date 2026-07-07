@@ -10,6 +10,7 @@ import { useAvatarUpload } from '@/lib/useAvatarUpload';
 import { Card } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
 import { formatCop } from '@/lib/utils';
+import { AddBookingSection } from '@/components/admin/ClassesAdmin';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,8 @@ interface Scoring {
 }
 interface PaymentRow {
   id: string; monto: number; metodo: string; estado: string; createdAt: string; notas?: string | null;
+  planNombre?: string | null; trainingNombre?: string | null; modalidad?: string | null;
+  fechaInicio?: string | null; fechaFin?: string | null;
 }
 interface PlanInfo {
   id: string; planNombre: string; trainingNombre: string; trainingColor: string;
@@ -271,6 +274,19 @@ function SessionDetail({ session, onBack }: { session: SessionRow; onBack: () =>
           <p className="text-center text-muted-foreground py-8 text-sm">Sin reservas en esta sesión.</p>
         )}
       </div>
+
+      {/* Reservar a nombre de un alumno (mismo buscador que usa el admin) */}
+      <Card className="p-0 overflow-hidden">
+        <AddBookingSection
+          session={session}
+          attendeeIds={new Set((att.data?.attendees ?? []).filter((a) => a.estado !== 'no_asistio').map((a) => a.userId))}
+          onAdded={() => {
+            qc.invalidateQueries({ queryKey: ['attendees', session.id] });
+            qc.invalidateQueries({ queryKey: ['coach-sessions'] });
+            qc.invalidateQueries({ queryKey: ['coach-week'] });
+          }}
+        />
+      </Card>
       <AnimatePresence>
         {planModal && (
           <PlanModal
@@ -411,6 +427,18 @@ function UserFicha({ userId, onBack }: { userId: string; onBack: () => void }) {
                     <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold">{formatCop(p.monto)}</p>
+                        {p.planNombre && (
+                          <p className="text-xs text-foreground/80 truncate">
+                            {p.planNombre}
+                            {p.trainingNombre ? ` · ${p.trainingNombre}` : ''}
+                            {p.modalidad ? ` · ${MODALIDAD_LABEL[p.modalidad] ?? p.modalidad}` : ''}
+                          </p>
+                        )}
+                        {p.fechaInicio && p.fechaFin && (
+                          <p className="text-[11px] text-muted-foreground">
+                            Cubre {fmtFecha(p.fechaInicio)} – {fmtFecha(p.fechaFin)}
+                          </p>
+                        )}
                         <p className="text-xs text-muted-foreground">
                           {METODO_LABEL[p.metodo] ?? p.metodo} · {new Date(p.createdAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </p>

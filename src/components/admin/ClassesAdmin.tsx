@@ -52,7 +52,7 @@ interface PickUser {
   avatarUrl?: string | null;
 }
 
-export function AddBookingSection({ session, attendeeIds }: { session: Session; attendeeIds: Set<string> }) {
+export function AddBookingSection({ session, attendeeIds, onAdded }: { session: Pick<Session, 'id'>; attendeeIds: Set<string>; onAdded?: () => void }) {
   const qc = useQueryClient();
   const [q, setQ] = useState('');
 
@@ -78,6 +78,7 @@ export function AddBookingSection({ session, attendeeIds }: { session: Session; 
       setQ('');
       qc.invalidateQueries({ queryKey: ['session-attendees', session.id] });
       qc.invalidateQueries({ queryKey: ['sessions-week'] });
+      onAdded?.();
     },
     onError: (err) => {
       const map: Record<string, string> = {
