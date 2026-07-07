@@ -329,7 +329,7 @@ function SendNotificationModal({ onClose }: { onClose: () => void }) {
 
   const usersQ = useQuery({
     queryKey: ['admin-users-notify'],
-    queryFn: () => api.get<{ users: PickUser[] }>('/users?limit=100'),
+    queryFn: () => api.get<{ users: PickUser[] }>('/users'),
   });
   // Solo usuarios activos (los inactivos no reciben notificaciones).
   const users = (usersQ.data?.users ?? []).filter((u) => u.activo !== false);
