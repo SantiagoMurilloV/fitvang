@@ -20,7 +20,9 @@ const SUGGESTIONS = {
   admin: [
     '¿Quién está reservado hoy?',
     '¿Quién tiene pagos pendientes?',
-    'Resumen financiero de este mes',
+    'Analiza las finanzas de los últimos 6 meses',
+    'Resérvale una clase a un usuario',
+    '¿Qué planes vencen esta semana?',
     '¿Quién lleva un mes sin venir?',
   ],
 };
@@ -37,10 +39,22 @@ const TOOL_LABELS: Record<string, string> = {
   reservas_por_fecha: 'Revisando reservas…',
   pagos_estado: 'Revisando pagos…',
   resumen_financiero: 'Calculando finanzas…',
+  finanzas_por_mes: 'Calculando finanzas…',
+  deudores: 'Revisando deudores…',
+  preparar_notificacion: 'Preparando notificación…',
   enviar_notificacion: 'Enviando notificación…',
   buscar_usuario: 'Buscando usuarios…',
   detalle_usuario: 'Revisando datos del usuario…',
+  listar_usuarios: 'Listando miembros…',
   usuarios_inactivos: 'Revisando inactividad…',
+  planes_del_club: 'Revisando planes del club…',
+  planes_por_vencer: 'Buscando planes por vencer…',
+  clases_semana: 'Revisando horario y cupos…',
+  reservar_clase: 'Gestionando la reserva…',
+  cancelar_reserva: 'Gestionando la cancelación…',
+  aprobar_pago: 'Procesando el pago…',
+  rechazar_comprobante: 'Procesando el comprobante…',
+  modo_analisis: 'Analizando a fondo, dame un momento…',
 };
 
 // Render markdown ligero: **negrita** + viñetas + saltos de línea.
@@ -85,7 +99,7 @@ export function VangBubble() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const greeting = isAdmin
-    ? `Hola **${firstName}**. Soy **Vang**, tu copiloto del club. Pregúntame quién está reservado, quién pagó o debe, resúmenes financieros, o pídeme enviar una notificación.`
+    ? `Hola **${firstName}**. Soy **Vang**, tu asistente del club. Pregúntame por usuarios, reservas, cupos, planes y finanzas, pídeme análisis a fondo, o dime y le reservo una clase a alguien, apruebo pagos y envío notificaciones (siempre te pido confirmación antes).`
     : `Hola **${firstName}**. Soy **Vang**, tu asistente de Fitvang. Pregúntame por tus clases, reservas y pagos, o pídeme tips de entrenamiento y alimentación.`;
 
   useEffect(() => {
