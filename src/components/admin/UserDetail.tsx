@@ -72,6 +72,10 @@ interface ScoringData {
 // formatCop ahora vive en @/lib/utils (antes redefinido localmente)
 
 /* ─── Campo editable inline ──────────────────────────────────────────── */
+// La API espera número para estas claves (mandarlas como string era rechazado
+// —antes descartado en silencio— por el schema del PATCH /users/:id).
+const NUMERIC_FIELDS: Record<string, 'decimal' | 'entero'> = { pesoKg: 'decimal', alturaCm: 'entero' };
+
 function Field({
   label, value, icon: Icon, userId, fieldKey, type = 'text',
 }: {
@@ -79,11 +83,21 @@ function Field({
   userId: string; fieldKey: string; type?: string;
 }) {
   const qc = useQueryClient();
+  const numeric = NUMERIC_FIELDS[fieldKey];
   const { editing, draft, setDraft, saving, start, cancel, save } = useInlineEdit({
     value: value ?? '',
     onSave: async (v) => {
+      let parsed: unknown = v || null;
+      if (numeric && v) {
+        const n = Number(v.replace(',', '.'));
+        if (Number.isNaN(n) || n <= 0) {
+          toast.error('Ingresa un número válido');
+          throw new Error('invalid_number');
+        }
+        parsed = numeric === 'entero' ? Math.round(n) : n;
+      }
       try {
-        await api.patch(`/users/${userId}`, { [fieldKey]: v || null });
+        await api.patch(`/users/${userId}`, { [fieldKey]: parsed });
         qc.invalidateQueries({ queryKey: ['user-ficha', userId] });
         qc.invalidateQueries({ queryKey: ['admin-users'] });
         toast.success('Guardado');
@@ -103,7 +117,10 @@ function Field({
           <div className="flex gap-2 mt-1">
             <input
               autoFocus
-              type={type}
+              // Campos numéricos como text+inputMode: type="number" reporta valor
+              // vacío ante la coma decimal y el guardado se descartaba en silencio.
+              type={numeric ? 'text' : type}
+              inputMode={numeric ? (numeric === 'decimal' ? 'decimal' : 'numeric') : undefined}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel(); }}

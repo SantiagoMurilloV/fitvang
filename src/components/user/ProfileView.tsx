@@ -147,6 +147,7 @@ function EditableField({
   value,
   onSave,
   type = 'text',
+  inputMode,
   placeholder,
   maxLength,
   isTextarea,
@@ -155,6 +156,7 @@ function EditableField({
   value: string;
   onSave: (v: string) => Promise<void>;
   type?: string;
+  inputMode?: 'decimal' | 'numeric';
   placeholder?: string;
   maxLength?: number;
   isTextarea?: boolean;
@@ -186,6 +188,7 @@ function EditableField({
             <input
               autoFocus
               type={type}
+              inputMode={inputMode}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               maxLength={maxLength}
@@ -246,7 +249,17 @@ export function ProfileView() {
   function field(key: string) {
     return async (value: string) => {
       const numKeys = ['pesoKg', 'alturaCm'];
-      const parsed = numKeys.includes(key) ? (value ? Number(value) : null) : value || null;
+      let parsed: unknown = value || null;
+      if (numKeys.includes(key) && value) {
+        // El teclado decimal en es-CO escribe coma ("70,5"): Number() daba NaN
+        // y el peso nunca se guardaba. La altura es entera en la API.
+        const n = Number(value.replace(',', '.'));
+        if (Number.isNaN(n) || n <= 0) {
+          toast.error('Ingresa un número válido.');
+          throw new Error('invalid_number');
+        }
+        parsed = key === 'alturaCm' ? Math.round(n) : n;
+      }
       await patch.mutateAsync({ [key]: parsed });
       toast.success('Guardado');
     };
@@ -406,18 +419,23 @@ export function ProfileView() {
         <Card className="space-y-4">
           <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Métricas físicas</p>
           <div className="grid grid-cols-2 gap-4">
+            {/* type="text": con type="number" el navegador reporta valor vacío
+                si el usuario escribe coma decimal ("70,5") y el guardado se
+                descartaba en silencio. inputMode conserva el teclado numérico. */}
             <EditableField
               label="Peso (kg)"
               value={u.pesoKg ? String(u.pesoKg) : ''}
               placeholder="Ej: 70.5"
-              type="number"
+              type="text"
+              inputMode="decimal"
               onSave={field('pesoKg')}
             />
             <EditableField
               label="Altura (cm)"
               value={u.alturaCm ? String(u.alturaCm) : ''}
               placeholder="Ej: 175"
-              type="number"
+              type="text"
+              inputMode="numeric"
               onSave={field('alturaCm')}
             />
           </div>
