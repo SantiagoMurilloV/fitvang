@@ -64,7 +64,7 @@ function UserRow({ u, onSelect }: { u: UserRow; onSelect: () => void }) {
   };
 
   return (
-    <Card className={`${!u.activo ? 'opacity-50' : ''}`}>
+    <Card className={`${!u.activo ? 'border-red-500/40 bg-red-500/5' : ''}`}>
       <button onClick={onSelect} className="flex items-center gap-3 w-full text-left">
         <div className="size-10 rounded-full bg-white/10 grid place-items-center text-sm font-bold shrink-0 overflow-hidden">
           {u.avatarUrl
@@ -77,6 +77,11 @@ function UserRow({ u, onSelect }: { u: UserRow; onSelect: () => void }) {
         </div>
         {/* Etiquetas apiladas: rol principal arriba, Acudiente debajo si aplica */}
         <div className="flex flex-col items-end gap-0.5 shrink-0">
+          {!u.activo && (
+            <span className="text-[8px] uppercase tracking-wide font-bold rounded-full px-1.5 py-px leading-tight bg-red-500 text-white">
+              Inactivo
+            </span>
+          )}
           <span className={`text-[8px] uppercase tracking-wide border rounded-full px-1.5 py-px leading-tight ${ROL_BADGE[u.rol]}`}>
             {ROL_LABEL[u.rol]}
           </span>
