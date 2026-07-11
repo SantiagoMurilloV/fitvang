@@ -474,7 +474,7 @@ function UserFicha({ userId, onBack }: { userId: string; onBack: () => void }) {
 
 function TodayTab() {
   const [openSession, setOpenSession] = useState<SessionRow | null>(null);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = format(new Date(), 'yyyy-MM-dd');
   const sessions = useQuery({
     queryKey: ['coach-sessions', today],
     queryFn: () => api.get<{ sessions: SessionRow[] }>(`/classes/sessions?from=${today}&to=${today}`),
