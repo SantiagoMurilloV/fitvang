@@ -457,7 +457,7 @@ function WeeklyCalendar() {
     const fecha = format(new Date(session.fecha + 'T12:00:00'), "d 'de' MMMM", { locale: es });
     const result = await Swal.fire({
       title: 'Eliminar sesión',
-      html: `<span style="color:#a1a1aa">¿Eliminar <b style="color:#f8f8f8">${session.nombre}</b> del ${fecha}?</span>`,
+      html: `<span style="color:#a1a1aa">¿Eliminar <b style="color:#f8f8f8">${session.nombre}</b> del ${fecha}?<br/>Es definitivo: esta sesión no se volverá a generar automáticamente.</span>`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'Sí, eliminar',
