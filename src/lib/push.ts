@@ -1,5 +1,36 @@
 import { api } from './api';
 
+// El modal invasivo solo se muestra una vez: al cerrarlo se marca este flag.
+export const PUSH_PROMPT_DISMISSED_KEY = 'fv-push-prompt-dismissed';
+// El usuario apagó las push desde el perfil: no re-suscribir automáticamente.
+export const PUSH_OPTOUT_KEY = 'fv-push-optout';
+
+export function isPushSupported(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof Notification !== 'undefined' &&
+    'serviceWorker' in navigator &&
+    'PushManager' in window
+  );
+}
+
+export async function getPushEnabled(): Promise<boolean> {
+  if (!isPushSupported()) return false;
+  if (Notification.permission !== 'granted') return false;
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  return !!sub;
+}
+
+export async function unsubscribePush(): Promise<void> {
+  if (!isPushSupported()) return;
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  if (!sub) return;
+  await api.post('/notifications/unsubscribe', { endpoint: sub.endpoint }).catch(() => {});
+  await sub.unsubscribe();
+}
+
 function urlBase64ToUint8Array(base64: string) {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4);
   const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');

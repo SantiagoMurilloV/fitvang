@@ -2,7 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { useEffect, useState, type ReactNode } from 'react';
 import { queryClient } from '@/lib/query';
-import { registerPush } from '@/lib/push';
+import { registerPush, PUSH_PROMPT_DISMISSED_KEY, PUSH_OPTOUT_KEY } from '@/lib/push';
 import { useAuth, type SessionUser } from '@/lib/auth-store';
 import { useUiActions, type UiAction } from '@/lib/ui-actions';
 import { api } from '@/lib/api';
@@ -234,8 +234,12 @@ function Shell({ user, variant, children }: Props) {
       typeof Notification !== 'undefined' &&
       Notification.permission === 'default'
     ) {
-      setTimeout(() => setShowPushPrompt(true), 1500);
-    } else {
+      // El modal solo se muestra una vez: si el usuario ya lo cerró con
+      // "Ahora no", puede activarlas después con el toggle del perfil.
+      if (!localStorage.getItem(PUSH_PROMPT_DISMISSED_KEY)) {
+        setTimeout(() => setShowPushPrompt(true), 1500);
+      }
+    } else if (!localStorage.getItem(PUSH_OPTOUT_KEY)) {
       registerPush().catch(() => {});
     }
   }, [user, setUser]);
@@ -336,7 +340,13 @@ function Shell({ user, variant, children }: Props) {
         <TermsModal onAccepted={() => setUser({ ...authUser, terminosAceptados: true })} />
       )}
 
-      <PushPromptModal open={showPushPrompt} onClose={() => setShowPushPrompt(false)} />
+      <PushPromptModal
+        open={showPushPrompt}
+        onClose={() => {
+          setShowPushPrompt(false);
+          localStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, '1');
+        }}
+      />
       <PwaInstallBanner />
     </div>
   );

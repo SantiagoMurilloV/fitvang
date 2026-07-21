@@ -8,6 +8,7 @@ import { format, addDays, startOfWeek } from 'date-fns';
 import { api } from '@/lib/api';
 import { useAvatarUpload } from '@/lib/useAvatarUpload';
 import { Card } from '@/components/shared/Card';
+import { PushToggle } from '@/components/shared/PushToggle';
 import { Button } from '@/components/shared/Button';
 import { formatCop } from '@/lib/utils';
 import { AddBookingSection } from '@/components/admin/ClassesAdmin';
@@ -747,6 +748,9 @@ function CoachProfileTab() {
           <Phone className="size-4 text-muted-foreground shrink-0" />
           <span className="text-sm text-muted-foreground flex-1">Teléfono</span>
           <span className="text-sm font-medium">{u.telefono || '—'}</span>
+        </div>
+        <div className="px-4 py-3">
+          <PushToggle />
         </div>
       </div>
 

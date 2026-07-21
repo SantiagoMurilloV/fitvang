@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bell } from 'lucide-react';
 import { toast } from 'sonner';
-import { registerPush } from '@/lib/push';
+import { registerPush, PUSH_OPTOUT_KEY } from '@/lib/push';
 
 interface Props {
   open: boolean;
@@ -24,11 +24,12 @@ export function PushPromptModal({ open, onClose }: Props) {
     try {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
+        localStorage.removeItem(PUSH_OPTOUT_KEY);
         await registerPush().catch(() => {});
         toast.success('¡Notificaciones activadas!');
         onClose();
       } else {
-        toast.error('Puedes activarlas después desde el navegador');
+        toast.error('Puedes activarlas cuando quieras desde tu perfil');
         onClose();
       }
     } finally {

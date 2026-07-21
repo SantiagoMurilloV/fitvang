@@ -8,6 +8,7 @@ import { useAvatarUpload } from '@/lib/useAvatarUpload';
 import { useInlineEdit } from '@/lib/useInlineEdit';
 import { Card } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
+import { PushToggle } from '@/components/shared/PushToggle';
 
 interface UserProfile {
   id: string;
@@ -462,6 +463,11 @@ export function ProfileView() {
           <div>
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Rol</span>
             <p className="text-sm mt-0.5 capitalize">{u.rol === 'super_admin' ? 'Admin' : u.rol}</p>
+          </div>
+          <div className="pt-1 border-t border-border/60">
+            <div className="mt-3">
+              <PushToggle />
+            </div>
           </div>
           <Button
             variant="outline"
