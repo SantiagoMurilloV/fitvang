@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { Check, X, ChevronLeft, DollarSign, Search, ChevronRight, Camera, Trash2, Flame, Clock, Mail, Phone, LogOut, Shield } from 'lucide-react';
 import { format, addDays, startOfWeek } from 'date-fns';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useAvatarUpload } from '@/lib/useAvatarUpload';
 import { Card } from '@/components/shared/Card';
 import { PushToggle } from '@/components/shared/PushToggle';
@@ -212,14 +212,23 @@ function SessionDetail({ session, onBack }: { session: SessionRow; onBack: () =>
     queryKey: ['attendees', session.id],
     queryFn: () => api.get<{ attendees: Attendee[] }>(`/classes/sessions/${session.id}/attendees`),
   });
+  const markError = (err: unknown) => {
+    if (err instanceof ApiError && err.data?.error === 'fuera_de_ventana_asistencia') {
+      toast.error(err.data?.message ?? 'La asistencia solo se puede marcar hasta 2 días después de la clase.');
+    } else {
+      toast.error('No se pudo marcar la asistencia.');
+    }
+  };
   const mark = useMutation({
     mutationFn: ({ bookingId, presente }: { bookingId: string; presente: boolean }) =>
       api.post('/attendance/mark', { bookingId, presente }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['attendees', session.id] }),
+    onError: markError,
   });
   const bulk = useMutation({
     mutationFn: () => api.post('/attendance/bulk', { sessionId: session.id, presente: true }),
     onSuccess: () => { toast.success('Todos marcados presentes'); qc.invalidateQueries({ queryKey: ['attendees', session.id] }); },
+    onError: markError,
   });
 
   return (
